@@ -62,8 +62,10 @@ class PromptOptimizerApp(rumps.App):
                 "--server.fileWatcherType", "none",
             ],
             cwd=APP_DIR,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=open("/tmp/promptopt.log", "w"),
+            stderr=subprocess.STDOUT,
+            # Detach from parent so server survives if menubar app restarts
+            start_new_session=True,
         )
         self._set_state(running=True)
         threading.Timer(2.5, lambda: webbrowser.open(URL)).start()
