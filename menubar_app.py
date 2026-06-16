@@ -24,7 +24,7 @@ class PromptOptimizerApp(rumps.App):
         self.stop_item  = rumps.MenuItem("Stop Server",  callback=self.stop_server)
         self.open_item  = rumps.MenuItem("Open in Browser", callback=self.open_browser)
 
-        self.stop_item.set_callback(None)   # disabled until server runs
+        self.stop_item.set_callback(None)
 
         self.menu = [
             self.open_item,
@@ -35,12 +35,21 @@ class PromptOptimizerApp(rumps.App):
             rumps.MenuItem("Quit", callback=self.quit_app),
         ]
 
-        # Auto-start on launch
+        self._kill_existing()
         self._start()
 
-    # ------------------------------------------------------------------ #
-    # Server management
-    # ------------------------------------------------------------------ #
+    def _kill_existing(self):
+        """Kill any stale Streamlit process on our port before starting fresh."""
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{PORT}"],
+                capture_output=True, text=True
+            )
+            pids = result.stdout.strip().split()
+            for pid in pids:
+                subprocess.run(["kill", "-9", pid], capture_output=True)
+        except Exception:
+            pass
 
     def _start(self):
         if self._proc and self._proc.poll() is None:
@@ -50,6 +59,7 @@ class PromptOptimizerApp(rumps.App):
                 "python3", "-m", "streamlit", "run", "app.py",
                 "--server.headless", "true",
                 "--server.port", str(PORT),
+                "--server.fileWatcherType", "none",
             ],
             cwd=APP_DIR,
             stdout=subprocess.DEVNULL,
@@ -66,16 +76,13 @@ class PromptOptimizerApp(rumps.App):
             except subprocess.TimeoutExpired:
                 self._proc.kill()
             self._proc = None
+        self._kill_existing()
         self._set_state(running=False)
 
     def _set_state(self, running: bool):
-        self.title = "⚡" if running else "⚡ ●"
+        self.title = "⚡" if running else "⚡●"
         self.start_item.set_callback(None if running else self.start_server)
         self.stop_item.set_callback(self.stop_server if running else None)
-
-    # ------------------------------------------------------------------ #
-    # Menu callbacks
-    # ------------------------------------------------------------------ #
 
     @rumps.clicked("Start Server")
     def start_server(self, _):
