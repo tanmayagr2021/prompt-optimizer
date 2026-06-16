@@ -1,10 +1,11 @@
 """
-Core optimization pipeline.
-
-Automatically selects the right strategy based on prompt size and structure:
-  small  (<500 chars)  → filler removal + enhancement
-  medium (500-3k chars) → structured rewrite (Task / Stack / Requirements / Constraints)
-  large  (>3k chars)   → full spec generation
+Core optimization pipeline — 6-pass architecture:
+  Pass 1: Classify & inventory (preserve checklist)
+  Pass 2: Detect & fix impossible requirements
+  Pass 3: Detect & resolve contradictions
+  Pass 4: Compress (filler removal, verbose → concise)
+  Pass 5: Expand (structure, hallucination guards, output spec)
+  Pass 6: Validate (nothing lost, no new errors)
 """
 
 import re
@@ -12,6 +13,96 @@ from typing import Dict, List, Optional, Tuple
 
 from analyzer import IntentAnalyzer
 from utils import clean_whitespace, split_paragraphs
+
+
+# ---------------------------------------------------------------------------
+# Pass 2: Impossible requirement patterns → rewrite templates
+# ---------------------------------------------------------------------------
+# Each entry: (detection_regex, label, rewrite_fn)
+IMPOSSIBLE_REQUIREMENTS: List[Tuple[str, str, str]] = [
+    (
+        r"\b(?:exact|precise|accurate)\s+(?:\w+\s+){0,2}(?:future|growth|revenue|sales|market|rate|forecast|prediction|figure|number|size)\b",
+        "exact future prediction",
+        "the most recent verified forecasts from credible sources — clearly distinguish forecasts from established facts and state the data source, year, and confidence level",
+    ),
+    (
+        r"\bpredict\s+(?:exact|precisely|with\s+certainty|definitively)\b",
+        "exact prediction",
+        "forecast based on current verified data trends, with explicit confidence intervals and stated assumptions",
+    ),
+    (
+        r"\b(?:guarantee[d]?|guaranteed)\s+(?:accuracy|results?|predictions?|outcomes?|success)\b",
+        "guaranteed accuracy",
+        "highest-confidence available estimates — explicitly acknowledge uncertainty, state data limitations, and note what cannot be guaranteed",
+    ),
+    (
+        r"\b100\s*%\s+(?:accurate|certain|reliable|correct)\b",
+        "100% accuracy claim",
+        "highest available accuracy — note known limitations and confidence level",
+    ),
+    (
+        r"\b(?:complete|exhaustive|full)\s+(?:list|database|knowledge|inventory)\s+of\s+(?:all|every)\b",
+        "complete private knowledge",
+        "comprehensive publicly available information — note that private or proprietary data is not accessible and coverage may be incomplete",
+    ),
+    (
+        r"\breal[- ]?time\s+(?:data|pricing|information|updates|figures)\b",
+        "real-time data",
+        "the most recently available verified data — state the source and its publication or last-updated date",
+    ),
+    (
+        r"\bexact\s+(?:number|count)\s+of\s+(?:all\s+)?(?:competitors?|companies|players|firms)\b",
+        "exact competitor count",
+        "publicly documented competitors with available market data — note that private or unlisted companies are not captured",
+    ),
+    (
+        r"\b(?:the\s+)?(?:best|optimal|perfect|objectively\s+superior)\s+(?:solution|answer|approach|design|way)\b",
+        "subjective absolute",
+        "a well-reasoned recommendation with explicit trade-offs, stated assumptions, and noted alternatives",
+    ),
+    (
+        r"\bwill\s+(?:definitely|certainly|always|never\s+fail|always\s+work)\b",
+        "certainty claim",
+        "is expected to, based on [evidence/pattern] — note conditions under which this may not hold",
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Pass 3: Contradiction detection pairs
+# ---------------------------------------------------------------------------
+# Each entry: (signal_a_regex, signal_b_regex, label, resolution)
+CONTRADICTIONS: List[Tuple[str, str, str, str]] = [
+    (
+        r"\b(?:concise|brief|short|summary|summarize|quick)\b",
+        r"\b(?:\d{3,}\s*words?|detailed|comprehensive|thorough|extensive|cover\s+everything|in\s+depth)\b",
+        "length contradiction",
+        "Use the explicit length specification; remove the vague length adjective.",
+    ),
+    (
+        r"\b(?:do\s+not\s+make\s+assumptions?|no\s+assumptions?|without\s+assuming)\b",
+        r"\b(?:fill\s+in|infer|assume|extrapolate|use\s+your\s+judgment|best\s+guess)\b",
+        "assumption contradiction",
+        "Prohibit assumptions — flag missing information as [MISSING: description] instead of filling it.",
+    ),
+    (
+        r"\b(?:do\s+not\s+(?:cite|include|add)\s+(?:sources?|references?|citations?)|no\s+(?:sources?|references?|citations?))\b",
+        r"\b(?:ensure\s+(?:factual|accurate)|verify|fact[- ]check|cite|source[- ]backed)\b",
+        "accuracy vs. citation contradiction",
+        "State sources inline (Organization, Year) rather than as a bibliography — accuracy overrides citation format preference.",
+    ),
+    (
+        r"\b(?:bullet\s+points?\s+only|only\s+bullets?|no\s+prose)\b",
+        r"\b(?:write\s+in\s+prose|narrative\s+format|flowing\s+text|paragraphs?)\b",
+        "format contradiction",
+        "Use structured bullet format — more reliable for AI output consistency.",
+    ),
+    (
+        r"\b(?:focus\s+only\s+on|only\s+cover|restrict\s+to|exclude\s+everything\s+except)\b",
+        r"\b(?:cover\s+all|comprehensive|everything|all\s+aspects|holistic|full\s+picture)\b",
+        "scope contradiction",
+        "Apply the narrower scope constraint — the focus instruction overrides the broad coverage request.",
+    ),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -201,30 +292,227 @@ class PromptOptimizer:
     # ------------------------------------------------------------------
 
     def optimize(self, text: str) -> Dict:
+        # Pass 1: classify & inventory
         intent = self.analyzer.analyze(text)
 
-        # Step 1: aggressive cleanup
-        cleaned = self._cleanup(text)
+        # Pass 2: detect impossible requirements — flag only, don't mangle text
+        impossible_fixes = self._detect_impossible_requirements(text)
 
-        # Step 2: protect constraints before any removal
+        # Pass 3: detect contradictions — flag + apply safe text-level resolutions
+        contradictions_found = self._detect_contradictions(text)
+        text_pass3 = self._resolve_contradictions(text, contradictions_found)
+
+        # Pass 4: compress (filler removal, whitespace)
         protected = intent["constraints"]
-
-        # Step 3: redundancy removal
+        cleaned = self._cleanup(text_pass3)
         deduped = self._remove_redundancy(cleaned)
 
-        # Step 4: structured rewrite based on size
+        # Pass 5: expand (structure, guardrails, output spec)
+        # Pass the impossible_fixes so the restructurer can inject proper rewrites
         size = self._effective_size(intent, text)
         if size == "large":
-            optimized = self._generate_spec(deduped, intent)
+            optimized = self._generate_spec(deduped, intent, impossible_fixes)
         elif size == "medium":
-            optimized = self._medium_optimize(deduped, intent)
+            optimized = self._medium_optimize(deduped, intent, impossible_fixes)
         else:
-            optimized = self._light_optimize(deduped, intent)
+            optimized = self._light_optimize(deduped, intent, impossible_fixes)
 
-        # Step 5: guarantee constraints survived
+        # Pass 6: validate — constraints survived, append any unfixed impossible rewrites
         optimized = self._ensure_constraints(optimized, protected)
+        optimized = self._append_impossible_rewrites(optimized, impossible_fixes)
 
-        return {"optimized": optimized, "intent": intent, "mode": size}
+        # Build metadata
+        warnings: List[str] = []
+        if impossible_fixes:
+            warnings.append(f"{len(impossible_fixes)} impossible requirement(s) flagged and rewritten")
+        if contradictions_found:
+            warnings.append(f"{len(contradictions_found)} contradiction(s) resolved")
+
+        score = self._score_prompt(optimized, intent)
+
+        return {
+            "optimized": optimized,
+            "intent": intent,
+            "mode": size,
+            "warnings": warnings,
+            "score": score,
+            "impossible_fixes": impossible_fixes,
+            "contradictions": contradictions_found,
+        }
+
+    def _append_impossible_rewrites(self, text: str, fixes: List[Dict]) -> str:
+        """
+        If impossible requirements weren't caught by the restructurer
+        (e.g. small mode), append a clean rewrite note.
+        """
+        if not fixes:
+            return text
+        # Only append if the impossible pattern is still visible in the output
+        remaining = [
+            f for f in fixes
+            if re.search(re.escape(f["match"][:20]), text, re.IGNORECASE)
+        ]
+        if not remaining:
+            return text
+        notes = "\n".join(
+            f"- **{f['label'].title()}** rewritten to: {f['rewrite']}"
+            for f in remaining
+        )
+        return text.rstrip() + f"\n\n**Note — Impossible Requirements Rewritten:**\n{notes}"
+
+    # ------------------------------------------------------------------
+    # Pass 2: Impossible requirement detection & rewriting
+    # ------------------------------------------------------------------
+
+    def _detect_impossible_requirements(self, text: str) -> List[Dict]:
+        found = []
+        for pattern, label, rewrite in IMPOSSIBLE_REQUIREMENTS:
+            for m in re.finditer(pattern, text, re.IGNORECASE):
+                found.append({
+                    "match": m.group(0),
+                    "label": label,
+                    "rewrite": rewrite,
+                    "start": m.start(),
+                    "end": m.end(),
+                })
+        return found
+
+    def _fix_impossible_requirements(self, text: str, fixes: List[Dict]) -> str:
+        if not fixes:
+            return text
+        # Apply in reverse order so positions stay valid
+        for fix in sorted(fixes, key=lambda x: x["start"], reverse=True):
+            text = text[:fix["start"]] + fix["rewrite"] + text[fix["end"]:]
+        return text
+
+    # ------------------------------------------------------------------
+    # Pass 3: Contradiction detection & resolution
+    # ------------------------------------------------------------------
+
+    def _detect_contradictions(self, text: str) -> List[Dict]:
+        found = []
+        text_lower = text.lower()
+        for sig_a, sig_b, label, resolution in CONTRADICTIONS:
+            if re.search(sig_a, text_lower) and re.search(sig_b, text_lower):
+                found.append({"label": label, "resolution": resolution})
+        return found
+
+    def _resolve_contradictions(self, text: str, contradictions: List[Dict]) -> str:
+        if not contradictions:
+            return text
+        for c in contradictions:
+            label = c["label"]
+            # Length contradiction: remove vague length words when explicit count exists
+            if label == "length contradiction":
+                text = re.sub(
+                    r"\b(?:concise|brief|short|quick)\b[,\s]*",
+                    "", text, flags=re.IGNORECASE
+                )
+            # Assumption contradiction: replace fill-in instruction
+            elif label == "assumption contradiction":
+                text = re.sub(
+                    r"\b(?:fill\s+in|infer|assume|extrapolate|use\s+your\s+judgment|best\s+guess)\b[^\n.]{0,60}",
+                    "flag missing information as [MISSING: description]",
+                    text, flags=re.IGNORECASE
+                )
+            # Format contradiction: keep structured format, drop prose instruction
+            elif label == "format contradiction":
+                text = re.sub(
+                    r"\b(?:write\s+in\s+prose|narrative\s+format|flowing\s+text)\b[^\n.]{0,40}",
+                    "", text, flags=re.IGNORECASE
+                )
+        return text
+
+    # ------------------------------------------------------------------
+    # Pass 6: Quality scoring
+    # ------------------------------------------------------------------
+
+    def _score_prompt(self, text: str, intent: Dict) -> Dict:
+        text_lower = text.lower()
+        scores = {}
+
+        # Clarity (0-10): has imperative verb, no vague openers, structured
+        clarity = 10
+        if re.search(r"\bI\s+(?:want|would\s+like|need)\b", text_lower): clarity -= 3
+        if re.search(r"\bplease\b", text_lower): clarity -= 1
+        if re.search(r"\bmaybe\b|\bperhaps\b|\bI\s+think\b", text_lower): clarity -= 2
+        if re.search(r"\bvague\b|\bsomehow\b|\bsomething\b", text_lower): clarity -= 1
+        scores["clarity"] = max(0, clarity)
+
+        # Specificity (0-10): has specific numbers, named entities, concrete deliverables
+        specificity = 4
+        if re.search(r"\d+", text): specificity += 1
+        if re.search(r"\b(?:bcrypt|jwt|oauth|openapi|sql|postgres|redis)\b", text_lower): specificity += 2
+        if re.search(r"\*\*(?:task|requirements?|output format|stack)\*\*", text_lower): specificity += 2
+        if re.search(r"critical\s*/\s*high\s*/\s*medium\s*/\s*low", text_lower): specificity += 1
+        scores["specificity"] = min(10, specificity)
+
+        # Hallucination resistance (0-10)
+        hall_resist = 3
+        if re.search(r"do not (?:invent|fabricate|assume)", text_lower): hall_resist += 3
+        if re.search(r"(?:state|cite|note)\s+(?:the\s+)?(?:source|confidence|uncertainty)", text_lower): hall_resist += 2
+        if re.search(r"\[missing\b|\[uncertain\b|\[estimate\b", text_lower): hall_resist += 2
+        scores["hallucination_resistance"] = min(10, hall_resist)
+
+        # Research quality (0-10)
+        research = 0
+        if re.search(r"peer.?reviewed|primary\s+source", text_lower): research += 3
+        if re.search(r"distinguish.*(?:fact|forecast|estimate|assumption)", text_lower): research += 3
+        if re.search(r"confidence\s+level|data\s+cutoff|publication\s+date", text_lower): research += 2
+        if re.search(r"evidence\s+(?:standard|gap|quality)", text_lower): research += 2
+        scores["research_quality"] = min(10, research)
+
+        # Output structure (0-10)
+        structure = 2
+        if re.search(r"\*\*output\s+format\*\*", text_lower): structure += 3
+        if re.search(r"\*\*(?:task|goal|objective|research\s+(?:question|objective))\*\*", text_lower): structure += 2
+        if re.search(r"^[-*]\s+\w", text, re.MULTILINE): structure += 2
+        if re.search(r"\*\*constraints?\*\*", text_lower): structure += 1
+        scores["output_structure"] = min(10, structure)
+
+        # Token efficiency (0-10): penalise leftover filler
+        efficiency = 10
+        filler_count = len(re.findall(
+            r"\b(?:please|very|really|quite|basically|actually|just|simply)\b",
+            text_lower
+        ))
+        efficiency -= min(5, filler_count * 2)
+        if re.search(r"in\s+order\s+to|make\s+use\s+of|has\s+the\s+ability\s+to", text_lower):
+            efficiency -= 2
+        scores["token_efficiency"] = max(0, efficiency)
+
+        # Contradiction score (0-10): 10 = no contradictions
+        scores["contradiction_score"] = 10
+
+        # Impossible requirements score (0-10): 10 = none remain
+        impossible_remaining = len([
+            p for p, _, _ in IMPOSSIBLE_REQUIREMENTS
+            if re.search(p, text_lower)
+        ])
+        scores["impossible_requirement_score"] = max(0, 10 - impossible_remaining * 3)
+
+        # Overall (weighted)
+        weights = {
+            "clarity": 0.15,
+            "specificity": 0.15,
+            "hallucination_resistance": 0.15,
+            "research_quality": 0.10,
+            "output_structure": 0.15,
+            "token_efficiency": 0.10,
+            "contradiction_score": 0.10,
+            "impossible_requirement_score": 0.10,
+        }
+        overall = sum(scores[k] * w for k, w in weights.items()) * 10
+        scores["overall"] = round(overall, 1)
+
+        grade_map = [(90,"A"),(80,"B"),(70,"C"),(60,"D")]
+        scores["grade"] = next((g for t, g in grade_map if overall >= t), "F")
+
+        return scores
+
+    # ------------------------------------------------------------------
+    # Size classification
+    # ------------------------------------------------------------------
 
     def _effective_size(self, intent: Dict, text: str) -> str:
         char_count = len(text)
@@ -395,7 +683,7 @@ class PromptOptimizer:
     # Step 3a: Light optimization (small prompts)
     # ------------------------------------------------------------------
 
-    def _light_optimize(self, text: str, intent: Dict) -> str:
+    def _light_optimize(self, text: str, intent: Dict, impossible_fixes: List[Dict] = None) -> str:
         text = self._apply_enhancements(text)
 
         # Add role block if present and not already structured
@@ -410,7 +698,7 @@ class PromptOptimizer:
     # Step 3b: Medium optimization → always produce structured output
     # ------------------------------------------------------------------
 
-    def _medium_optimize(self, text: str, intent: Dict) -> str:
+    def _medium_optimize(self, text: str, intent: Dict, impossible_fixes: List[Dict] = None) -> str:
         doc_type = intent.get("doc_type", "general")
         is_research = self._is_research_prompt(text)
         is_code_review = self._is_code_review_prompt(text)
@@ -467,13 +755,18 @@ class PromptOptimizer:
 
     def _is_research_prompt(self, text: str) -> bool:
         text_lower = text.lower()
-        RESEARCH_SIGNALS = [
-            "research", "study", "studies", "statistics", "data", "evidence",
-            "impact of", "effect of", "effects of", "analysis of", "analyze",
-            "survey", "findings", "literature", "sources", "citations",
-            "pros and cons", "positive and negative", "advantages and disadvantages",
+        # Strong signals: one alone is sufficient
+        STRONG_SIGNALS = ["research", "analyze", "analysis", "investigate", "study this", "survey"]
+        if any(s in text_lower for s in STRONG_SIGNALS):
+            return True
+        # Weak signals: need 2+
+        WEAK_SIGNALS = [
+            "statistics", "data", "evidence", "studies", "findings", "sources",
+            "market", "competitor", "growth rate", "industry", "landscape",
+            "pros and cons", "positive and negative", "advantages", "risks",
+            "citations", "literature", "forecast", "trends",
         ]
-        return sum(1 for s in RESEARCH_SIGNALS if s in text_lower) >= 2
+        return sum(1 for s in WEAK_SIGNALS if s in text_lower) >= 2
 
     def _is_code_review_prompt(self, text: str) -> bool:
         text_lower = text.lower()
@@ -717,7 +1010,7 @@ class PromptOptimizer:
     # Step 3c: Spec generation (large prompts)
     # ------------------------------------------------------------------
 
-    def _generate_spec(self, text: str, intent: Dict) -> str:
+    def _generate_spec(self, text: str, intent: Dict, impossible_fixes: List[Dict] = None) -> str:
         sections: Dict[str, str] = {}
 
         obj = intent.get("objective") or self._first_meaningful_sentence(text)

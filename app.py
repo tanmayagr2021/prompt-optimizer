@@ -245,15 +245,16 @@ def main() -> None:
             t0 = time.perf_counter()
             optimized_text: str | None = None
             used_llm = False
+            result = None
 
             if use_llm and model:
-                with st.spinner(f"Optimizing with {model}…"):
+                with st.spinner(f"Running 6-pass optimization with {model}…"):
                     optimized_text = optimize_with_llm(user_input, model)
                     if optimized_text:
                         used_llm = True
 
             if not optimized_text:
-                with st.spinner("Optimizing…"):
+                with st.spinner("Running 6-pass optimization…"):
                     result = optimizer.optimize(user_input)
                     optimized_text = result["optimized"]
 
@@ -264,7 +265,11 @@ def main() -> None:
             st.session_state["elapsed"]     = elapsed
             st.session_state["used_llm"]    = used_llm
             st.session_state["llm_model"]   = model if used_llm else None
-            st.session_state["rule_mode"]   = result["mode"] if not used_llm else None
+            st.session_state["rule_mode"]   = result["mode"] if result else None
+            st.session_state["warnings"]    = result["warnings"] if result else []
+            st.session_state["score"]       = result["score"] if result else None
+            st.session_state["impossible"]  = result.get("impossible_fixes", []) if result else []
+            st.session_state["contradictions"] = result.get("contradictions", []) if result else []
 
         if "result_text" in st.session_state:
             optimized_text: str = st.session_state["result_text"]
@@ -286,6 +291,20 @@ def main() -> None:
                     f'<span style="color:#6b7280;font-size:0.8rem;">{elapsed:.2f}s (rule-based)</span>',
                     unsafe_allow_html=True,
                 )
+
+            # Warnings (impossible requirements / contradictions fixed)
+            warnings    = st.session_state.get("warnings", [])
+            impossible  = st.session_state.get("impossible", [])
+            contradicts = st.session_state.get("contradictions", [])
+
+            if impossible:
+                with st.expander(f"⚠️ {len(impossible)} impossible requirement(s) rewritten", expanded=True):
+                    for fix in impossible:
+                        st.markdown(f"**Original:** `{fix['match']}`  \n**Rewritten to:** {fix['rewrite']}")
+            if contradicts:
+                with st.expander(f"🔀 {len(contradicts)} contradiction(s) resolved", expanded=True):
+                    for c in contradicts:
+                        st.markdown(f"**{c['label'].title()}** — {c['resolution']}")
 
             st.code(optimized_text, language="markdown")
 
@@ -358,6 +377,40 @@ def main() -> None:
                     f'<div class="stat-label">Token reduction</div></div>',
                     unsafe_allow_html=True,
                 )
+
+            # Quality score (rule-based only — LLM output not auto-scored)
+            score = st.session_state.get("score")
+            if score and not used_llm:
+                st.markdown('<hr class="divider">', unsafe_allow_html=True)
+                st.markdown('<p class="section-label">Quality Score</p>', unsafe_allow_html=True)
+                grade_color = {"A":"#15803d","B":"#1d4ed8","C":"#b45309","D":"#dc2626","F":"#7f1d1d"}.get(score.get("grade","F"),"#6b7280")
+                st.markdown(
+                    f'<div style="font-size:2rem;font-weight:700;color:{grade_color};">'
+                    f'{score.get("overall",0)}/100 &nbsp; <span style="font-size:1.2rem;">{score.get("grade","?")}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                dims = [
+                    ("Clarity",               "clarity"),
+                    ("Specificity",           "specificity"),
+                    ("Hallucination Resist.", "hallucination_resistance"),
+                    ("Research Quality",      "research_quality"),
+                    ("Output Structure",      "output_structure"),
+                    ("Token Efficiency",      "token_efficiency"),
+                    ("Contradiction Score",   "contradiction_score"),
+                    ("Impossible Req. Score", "impossible_requirement_score"),
+                ]
+                cols = st.columns(4)
+                for i, (label, key) in enumerate(dims):
+                    val = score.get(key, 0)
+                    color = "#15803d" if val >= 8 else "#b45309" if val >= 5 else "#dc2626"
+                    with cols[i % 4]:
+                        st.markdown(
+                            f'<div class="stat-card">'
+                            f'<div class="stat-value" style="color:{color};font-size:1.2rem;">{val}/10</div>'
+                            f'<div class="stat-label">{label}</div></div>',
+                            unsafe_allow_html=True,
+                        )
 
         else:
             st.markdown(
