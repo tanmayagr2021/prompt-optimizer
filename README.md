@@ -1,103 +1,99 @@
-# Prompt Optimizer
+# ⚡ Prompt Optimizer
 
-A fully local, free Prompt Optimizer that transforms long or inefficient AI prompts into shorter, better-structured ones — without any external APIs, accounts, or configuration.
+Compress and restructure AI prompts — removes filler, strips redundancy, and produces structured outputs that get better results from ChatGPT, Claude, Gemini, Cursor, and more.
 
-Works with Claude Code, ChatGPT, Gemini, Cursor, Windsurf, and similar systems.
-
----
-
-## Quick start
-
-```bash
-# 1. Create a virtual environment (recommended)
-python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Download the spaCy language model
-python -m spacy download en_core_web_sm
-
-# 4. Launch the app
-streamlit run app.py
-```
-
-Open http://localhost:8501 in your browser.
+Runs **100% locally**. No API key. No account. No cost.
 
 ---
 
-## Optional: faster sentence-transformers (CPU-only PyTorch)
+## Install (macOS) — one command
 
-The default `pip install sentence-transformers` pulls a full CUDA-capable PyTorch build (~2 GB). For CPU-only machines:
+Open **Terminal** and paste:
 
 ```bash
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install sentence-transformers
+curl -fsSL https://raw.githubusercontent.com/tanmayagr2021/prompt-optimizer/main/install.sh | bash
 ```
 
-The app works without `sentence-transformers` — it falls back to keyword-based redundancy detection automatically.
+That's it. The script installs everything and puts **PromptOptimizer.app** on your Desktop. Double-click to launch.
+
+> **First time macOS blocks it?** Right-click the app → **Open** → click **Open** in the dialog. Only needed once.
+
+---
+
+## Optional: enable AI mode (free, local)
+
+The default optimizer uses rules. For dramatically better results, add a local AI in ~5 minutes:
+
+1. Download **Ollama** → [ollama.com/download](https://ollama.com/download)
+2. Open Terminal and run:
+   ```bash
+   ollama pull llama3.2
+   ```
+3. Relaunch the app — the sidebar shows **🟢 Ollama connected** and AI mode turns on automatically.
+
+No API key. No cost. Fully private — the model runs on your Mac.
 
 ---
 
 ## How it works
 
-| Mode   | Triggered when          | Strategy                                            |
-|--------|-------------------------|-----------------------------------------------------|
-| Small  | < 500 characters        | Cleanup + minor phrase enhancement                  |
-| Medium | 500 – 3,000 characters  | Cleanup + dedup + role/stack extraction + reformat  |
-| Large  | > 3,000 characters      | Full spec generation (Objective / Users / Features / Stack / Constraints / Deliverables) |
+Paste any prompt → click **⚡ Optimize** → get a shorter, sharper version.
 
-The mode is chosen automatically. The user never sees or configures it.
+| Prompt type | What it produces |
+|---|---|
+| Technical (build / create) | Task · Stack · Requirements · Output Format |
+| Research / analysis | Research Question · Evidence Standards · Hallucination guardrails · Report structure |
+| Code review | Role · Focus Areas · Severity-ranked output format · Flags missing code |
+| Small / conversational | Filler stripped, vague phrases sharpened |
 
-### Pipeline steps
-
-1. **Cleanup** — strips HTML, normalises whitespace, removes decorative markdown, deduplicates exact lines
-2. **Intent analysis** — extracts role, task, tech stack, constraints, users, features, and objective
-3. **Redundancy removal** — semantic dedup via sentence-transformers, or keyword-based synonym-group dedup
-4. **Restructuring** — converts role prose to `**Role:**` blocks, inline tech stacks to `**Stack:**` bullet lists, prose comma-lists to bullet points
-5. **Constraint enforcement** — any critical constraints (do not / must not / preserve / maintain) that were removed are re-injected into the output
-6. **Enhancement** — replaces vague phrases ("make a website") with clearer ones ("Build a production-ready website") using a curated, high-confidence lookup table
+### What gets removed
+- Polite filler: *"please"*, *"I would like you to"*, *"could you"*, *"I want you to"*
+- Hedging: *"I think"*, *"maybe"*, *"sort of"*, *"I believe"*
+- Weak intensifiers: *"very"*, *"really"*, *"quite"*, *"basically"*
+- Verbose phrases: *"in order to"* → **to**, *"make use of"* → **use**, *"has the ability to"* → **can**
 
 ---
 
-## Supported input types
+## Supported input
 
-### Text input
-Paste any prompt directly into the text area.
+- Paste any text directly
+- Upload **PDF**, **DOCX**, **TXT**, or **MD** files
 
-### File upload
-| Format | Method          |
-|--------|-----------------|
-| `.pdf` | MarkItDown      |
-| `.docx`| MarkItDown      |
-| `.txt` | Direct decode   |
-| `.md`  | Direct decode   |
+---
+
+## Update to latest version
+
+Re-run the same install command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tanmayagr2021/prompt-optimizer/main/install.sh | bash
+```
+
+---
+
+## Manual setup (if you prefer)
+
+```bash
+git clone https://github.com/tanmayagr2021/prompt-optimizer.git
+cd prompt-optimizer
+pip3 install -r requirements.txt
+python3 -m spacy download en_core_web_sm
+streamlit run app.py
+```
+
+Open [http://localhost:8501](http://localhost:8501)
 
 ---
 
 ## Project structure
 
 ```
-app.py          — Streamlit UI (single page)
-optimizer.py    — Core pipeline (cleanup → dedup → restructure → spec)
-analyzer.py     — Intent analysis (role, task, tech stack, constraints, doc type)
-extractor.py    — File extraction via MarkItDown
-utils.py        — Stats, token estimation, text helpers
-requirements.txt
-README.md
+app.py           — Streamlit UI
+optimizer.py     — Rule-based pipeline (cleanup → dedup → structure)
+analyzer.py      — Intent analysis (role, task, tech stack, constraints)
+llm_backend.py   — Ollama AI backend
+extractor.py     — PDF / DOCX text extraction
+utils.py         — Stats and helpers
+menubar_app.py   — macOS menu bar launcher
+install.sh       — One-line installer
 ```
-
----
-
-## Dependencies
-
-| Library              | Purpose                          |
-|----------------------|----------------------------------|
-| streamlit            | UI                               |
-| markitdown           | PDF / DOCX extraction            |
-| spacy                | NLP (lazy-loaded, optional)      |
-| sentence-transformers| Semantic redundancy detection    |
-| nltk                 | Tokenisation fallback            |
-
-All dependencies are free and open-source. No external AI APIs are used.
