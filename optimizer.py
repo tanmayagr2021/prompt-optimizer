@@ -62,6 +62,11 @@ FILLER_PHRASES: List[Tuple[str, str]] = [
     (r"\bFurthermore\s*,?\s*", ""),
     (r"\bMoreover\s*,?\s*", ""),
     (r"\bOn\s+top\s+of\s+that\s*,?\s*", ""),
+    # "I would like [noun phrase]" (no "you to" — handled separately above)
+    (r"\bI\s+would\s+(?:really\s+)?like\s+(?:some\s+|a\s+|an\s+|to\s+see\s+)?", ""),
+    (r"\bI\s+would\s+(?:really\s+)?appreciate\s+(?:some\s+|a\s+|an\s+)?", ""),
+    (r"\bfeel\s+free\s+to\s+", ""),
+    (r"\bwhenever\s+possible\b[,\s]*", ""),
 ]
 
 # ---------------------------------------------------------------------------
@@ -222,15 +227,17 @@ class PromptOptimizer:
         return {"optimized": optimized, "intent": intent, "mode": size}
 
     def _effective_size(self, intent: Dict, text: str) -> str:
-        raw_size = intent["prompt_size"]
-        if raw_size == "small":
-            return "small"
-        doc_type = intent.get("doc_type", "general")
         char_count = len(text)
-        if doc_type in ("prd", "spec", "meeting", "business") and char_count >= 1_500:
-            return "large"
         if char_count >= 3_000:
             return "large"
+        doc_type = intent.get("doc_type", "general")
+        if doc_type in ("prd", "spec", "meeting", "business") and char_count >= 1_500:
+            return "large"
+        # Research and code review always get structured output regardless of length
+        if self._is_research_prompt(text) or self._is_code_review_prompt(text):
+            return "medium"
+        if char_count < 500:
+            return "small"
         return "medium"
 
     # ------------------------------------------------------------------
@@ -270,6 +277,10 @@ class PromptOptimizer:
     def _strip_fillers(self, text: str) -> str:
         for pattern, replacement in FILLER_PHRASES:
             text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        # Fix broken articles: "a [vowel-word]" → "an [vowel-word]"
+        text = re.sub(r"\ba\s+([aeiouAEIOU])", r"an \1", text)
+        # Fix double articles: "an an" / "a a"
+        text = re.sub(r"\b(a|an)\s+(a|an)\s+", r"\1 ", text, flags=re.IGNORECASE)
         # Clean up double spaces and sentence-start artifacts
         text = re.sub(r"[ \t]{2,}", " ", text)
         text = re.sub(r"(?<=[.!?])\s{2,}", " ", text)
@@ -400,7 +411,20 @@ class PromptOptimizer:
     # ------------------------------------------------------------------
 
     def _medium_optimize(self, text: str, intent: Dict) -> str:
+        doc_type = intent.get("doc_type", "general")
+        is_research = self._is_research_prompt(text)
+        is_code_review = self._is_code_review_prompt(text)
         parts: list[str] = []
+
+        # --- Research / analysis prompts get a completely different structure ---
+        if is_research:
+            return self._research_optimize(text, intent)
+
+        # --- Code review prompts ---
+        if is_code_review:
+            return self._code_review_optimize(text, intent)
+
+        # --- Technical / general prompts ---
 
         # Role
         role = intent.get("role")
@@ -423,15 +447,15 @@ class PromptOptimizer:
         if reqs:
             parts.append("**Requirements:**\n" + "\n".join(f"- {r}" for r in reqs))
 
+        # Output format
+        output_fmt = self._infer_output_format(text, intent)
+        if output_fmt:
+            parts.append(f"**Output Format:** {output_fmt}")
+
         # Constraints
         constraints = self._dedup_constraints(intent.get("constraints", []))
         if constraints:
             parts.append("**Constraints:**\n" + "\n".join(f"- {c}" for c in constraints[:8]))
-
-        # Output format / deliverables
-        deliverables = intent.get("deliverables", [])
-        if deliverables:
-            parts.append("**Deliverables:**\n" + "\n".join(f"- {d}" for d in deliverables[:4]))
 
         if len(parts) >= 2:
             return "\n\n".join(parts)
@@ -440,6 +464,116 @@ class PromptOptimizer:
         text = self._apply_enhancements(text.strip())
         text = self._prose_to_bullets(text)
         return text
+
+    def _is_research_prompt(self, text: str) -> bool:
+        text_lower = text.lower()
+        RESEARCH_SIGNALS = [
+            "research", "study", "studies", "statistics", "data", "evidence",
+            "impact of", "effect of", "effects of", "analysis of", "analyze",
+            "survey", "findings", "literature", "sources", "citations",
+            "pros and cons", "positive and negative", "advantages and disadvantages",
+        ]
+        return sum(1 for s in RESEARCH_SIGNALS if s in text_lower) >= 2
+
+    def _is_code_review_prompt(self, text: str) -> bool:
+        text_lower = text.lower()
+        REVIEW_SIGNALS = ["review", "code review", "what is wrong", "improve my code",
+                          "feedback on", "critique", "audit my"]
+        return any(s in text_lower for s in REVIEW_SIGNALS)
+
+    def _research_optimize(self, text: str, intent: Dict) -> str:
+        """Structure for research / analysis prompts with quality controls."""
+        parts: list[str] = []
+
+        # Research question — convert to clean interrogative or imperative form
+        task = self._build_task_line(text, intent)
+        if task:
+            task = task.rstrip(".?!")
+            # "Do some research on X" → "Analyze X"
+            task = re.sub(r"^Do\s+(?:some\s+)?research\s+on\s+", "Analyze ", task, flags=re.IGNORECASE)
+            # "Research X" → "Analyze X"
+            task = re.sub(r"^Research\s+", "Analyze ", task, flags=re.IGNORECASE)
+            parts.append(f"**Research Question:** {task}.")
+
+        # Scope
+        scope_parts: list[str] = []
+        if re.search(r"\b(teen|adolescent|child|adult|elderly|student)\w*\b", text, re.IGNORECASE):
+            scope_parts.append("Population: as specified in prompt")
+        if re.search(r"\b(positive|negative|both|pros|cons|advantages|disadvantages)\b", text, re.IGNORECASE):
+            scope_parts.append("Cover both positive and negative evidence")
+        if scope_parts:
+            parts.append("**Scope:**\n" + "\n".join(f"- {s}" for s in scope_parts))
+
+        # Evidence standards (always added for research)
+        parts.append(
+            "**Evidence Standards:**\n"
+            "- Prioritize peer-reviewed studies and primary sources\n"
+            "- Prefer sources published 2018–present unless discussing foundational work\n"
+            "- Distinguish between established findings and emerging/contested evidence\n"
+            "- Do not fabricate statistics, study names, or citations\n"
+            "- If data is unavailable or contested, state so explicitly"
+        )
+
+        # Output format
+        parts.append(
+            "**Output Format:** Structured report —\n"
+            "1. Background & Context\n"
+            "2. Key Evidence (with citations)\n"
+            "3. Analysis & Interpretation\n"
+            "4. Conclusions\n"
+            "Include inline citations (Author, Year) for all factual claims."
+        )
+
+        return "\n\n".join(parts)
+
+    def _code_review_optimize(self, text: str, intent: Dict) -> str:
+        """Structure for code review prompts."""
+        parts: list[str] = []
+
+        role = intent.get("role")
+        if role:
+            parts.append(f"**Role:** {role.strip().rstrip('.,:')}")
+
+        parts.append("**Task:** Review the provided code.")
+
+        # Focus areas from text
+        focus: list[str] = []
+        text_lower = text.lower()
+        if "performance" in text_lower: focus.append("Performance bottlenecks")
+        if "security" in text_lower:    focus.append("Security vulnerabilities (OWASP Top 10)")
+        if "best practice" in text_lower or "clean" in text_lower: focus.append("Code quality and best practices")
+        if "error" in text_lower:       focus.append("Error handling and edge cases")
+        if not focus:
+            focus = ["Correctness", "Performance", "Security", "Readability"]
+        parts.append("**Focus Areas:**\n" + "\n".join(f"- {f}" for f in focus))
+
+        parts.append(
+            "**Output Format:** Prioritized issue list with severity — "
+            "Critical / High / Medium / Low. For each: describe the issue, "
+            "explain the risk, and provide a corrected code snippet."
+        )
+
+        # Flag missing code
+        has_code = bool(re.search(r"```|def |class |function |const |var |let |public |private ", text))
+        if not has_code:
+            parts.append("**Note:** [Paste the code to review here]")
+
+        return "\n\n".join(parts)
+
+    def _infer_output_format(self, text: str, intent: Dict) -> Optional[str]:
+        """Infer the expected output format from the prompt."""
+        text_lower = text.lower()
+        if re.search(r"\bapi\b|\bendpoint\b|\broute\b", text_lower):
+            return "Working code with RESTful endpoints, error handling, and an OpenAPI schema or inline docs."
+        if re.search(r"\bdashboard\b|\bui\b|\bfrontend\b|\bcomponent\b", text_lower):
+            return "Component files with responsive layout, accessible markup, and inline style/class definitions."
+        if re.search(r"\bdatabase\b|\bschema\b|\bmigration\b", text_lower):
+            return "SQL schema or migration file with table definitions, indexes, and seed data if applicable."
+        if re.search(r"\btest\b|\bspec\b|\bunit test\b", text_lower):
+            return "Test file covering happy path, edge cases, and failure scenarios."
+        if re.search(r"\bdocument\b|\bwrite up\b|\breport\b", text_lower):
+            return "Structured written document with headings and clear sections."
+        return None
 
     def _build_task_line(self, text: str, intent: Dict) -> Optional[str]:
         """Derive a clean, imperative task sentence from the already-cleaned text."""
