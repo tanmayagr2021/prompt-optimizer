@@ -1,0 +1,15 @@
+# Core UI
+streamlit>=1.32.0
+
+# File extraction
+markitdown[all]>=0.0.1
+
+# NLP — intent analysis
+spacy>=3.7.0
+nltk>=3.8.0
+
+# Semantic redundancy detection (optional but recommended)
+# Requires PyTorch; for CPU-only install use:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install sentence-transformers
+sentence-transformers>=2.5.0
