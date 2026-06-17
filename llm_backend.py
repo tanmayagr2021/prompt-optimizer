@@ -255,6 +255,51 @@ def _build_user_message(prompt: str) -> str:
     return f"Optimize this prompt:\n\n{prompt}"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Groq cloud backend (free tier — works on Streamlit Cloud)
+# ─────────────────────────────────────────────────────────────────────────────
+
+GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-70b-versatile",
+    "llama3-70b-8192",
+    "mixtral-8x7b-32768",
+]
+
+
+def optimize_with_groq(prompt: str, api_key: str, model: str = "") -> Optional[str]:
+    """Call Groq cloud API. Free tier, no local install needed."""
+    if not model:
+        model = GROQ_MODELS[0]
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": _build_user_message(prompt)},
+            ],
+            temperature=0.2,
+            max_tokens=2048,
+        )
+        result: str = response.choices[0].message.content.strip()
+        return _strip_preamble(result) or None
+    except Exception:
+        return None
+
+
+def groq_available(api_key: str) -> bool:
+    if not api_key:
+        return False
+    try:
+        from groq import Groq
+        Groq(api_key=api_key).models.list()
+        return True
+    except Exception:
+        return False
+
+
 def get_available_models() -> list[str]:
     try:
         import ollama
