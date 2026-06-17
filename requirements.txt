@@ -4,15 +4,12 @@ streamlit>=1.32.0
 # File extraction
 markitdown[all]>=0.0.1
 
-# NLP — intent analysis (rule-based fallback)
+# NLP
 spacy>=3.7.0
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
 nltk>=3.8.0
 
-# AI backend — local LLM via Ollama (optional but strongly recommended)
-# Install Ollama from https://ollama.com/download, then: ollama pull llama3.2
+# AI backends
+groq>=1.0.0
 ollama>=0.4.0
 
-# Semantic redundancy detection (optional)
-# pip install torch --index-url https://download.pytorch.org/whl/cpu
-# pip install sentence-transformers
-sentence-transformers>=2.5.0
