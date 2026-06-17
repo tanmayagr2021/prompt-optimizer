@@ -3,6 +3,7 @@ Prompt Optimizer — Streamlit application entry point.
 Run with: streamlit run app.py
 """
 
+import os
 import time
 import streamlit as st
 
@@ -13,6 +14,8 @@ from llm_backend import (
     get_available_models,
     optimize_with_llm,
     _pick_default_model,
+    optimize_with_groq,
+    GROQ_MODELS,
 )
 from utils import calculate_stats
 
@@ -108,6 +111,13 @@ def _cached_models() -> list[str]:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _get_groq_key() -> str:
+    try:
+        return st.secrets.get("GROQ_API_KEY", "")
+    except Exception:
+        return os.environ.get("GROQ_API_KEY", "")
+
+
 def _mode_badge(mode: str, use_llm: bool) -> str:
     if use_llm:
         return '<span class="mode-badge mode-ai">AI</span>'
@@ -119,14 +129,39 @@ def _format_number(n: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Sidebar — Ollama / model settings
+# Sidebar — Engine settings (Groq cloud → Ollama local → rules only)
 # ---------------------------------------------------------------------------
 
-def render_sidebar() -> tuple[bool, str | None]:
-    """Returns (use_llm, model_name_or_None)."""
+def render_sidebar():
+    """Returns (use_llm, backend, model).  backend is 'groq', 'ollama', or None."""
     with st.sidebar:
         st.markdown("### ⚙️ Optimization Engine")
 
+        # ── Groq (cloud, preferred) ──────────────────────────────────────
+        auto_groq_key = _get_groq_key()
+        has_groq_auto = bool(auto_groq_key)
+
+        if has_groq_auto:
+            st.markdown(
+                '<div class="status-pill status-ai">🟢 Groq AI connected</div>',
+                unsafe_allow_html=True,
+            )
+            use_groq = st.toggle("Use Groq AI (cloud)", value=True)
+            groq_model = st.selectbox("Groq model", GROQ_MODELS, index=0)
+            if use_groq:
+                st.caption(f"Using **{groq_model}** via Groq cloud API.")
+                return True, "groq", groq_model
+            # fell through — user disabled Groq, fall to Ollama check below
+        else:
+            # Offer manual Groq key entry
+            with st.expander("🔑 Connect Groq AI (free cloud API)"):
+                manual_key = st.text_input("Groq API key", type="password", placeholder="gsk_…")
+                st.caption("Get a free key at [console.groq.com](https://console.groq.com)")
+                if manual_key:
+                    groq_model = st.selectbox("Groq model", GROQ_MODELS, index=0)
+                    return True, "groq", groq_model
+
+        # ── Ollama (local fallback) ───────────────────────────────────────
         models = _cached_models()
         has_ollama = bool(models)
 
@@ -138,35 +173,32 @@ def render_sidebar() -> tuple[bool, str | None]:
                 '<div class="status-pill status-ai">🟢 Ollama connected</div>',
                 unsafe_allow_html=True,
             )
-
-            use_llm = st.toggle("Use AI (Ollama)", value=True)
-            model = st.selectbox("Model", models, index=default_idx)
+            use_llm = st.toggle("Use AI (Ollama local)", value=not has_groq_auto)
+            model = st.selectbox("Ollama model", models, index=default_idx)
 
             if use_llm:
-                st.caption(f"Using **{model}** for AI-powered optimization.")
-            else:
-                st.caption("Using fast rule-based optimizer (no AI).")
+                st.caption(f"Using **{model}** locally via Ollama.")
+                return True, "ollama", model
 
-            return use_llm, model
-
-        else:
+        # ── No AI available ───────────────────────────────────────────────
+        if not has_groq_auto and not has_ollama:
             st.markdown(
-                '<div class="status-pill status-off">⚪ Ollama not found</div>',
+                '<div class="status-pill status-off">⚪ No AI backend</div>',
                 unsafe_allow_html=True,
             )
-
             st.markdown(
-                "**Get AI-quality optimization for free:**\n\n"
-                "1. [Download Ollama](https://ollama.com/download) and install it\n"
-                "2. Open Terminal and run:\n"
-                "```\nollama pull llama3.2\n```\n"
-                "3. Refresh this page\n\n"
-                "Ollama runs locally — no API key, no cost, fully private."
+                "**Option 1 — Groq (free cloud AI):**\n\n"
+                "Get a free key at [console.groq.com](https://console.groq.com) "
+                "and paste it in the expander above.\n\n"
+                "**Option 2 — Ollama (local, private):**\n\n"
+                "1. [Download Ollama](https://ollama.com/download)\n"
+                "2. Run `ollama pull llama3.2` in Terminal\n"
+                "3. Refresh this page"
             )
 
-            st.divider()
-            st.caption("Currently using rule-based optimizer.")
-            return False, None
+        st.divider()
+        st.caption("Using fast rule-based optimizer.")
+        return False, None, None
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +212,8 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    use_llm, model = render_sidebar()
+    use_llm, backend, model = render_sidebar()
+    groq_key = _get_groq_key()
     optimizer = get_optimizer()
     extractor = get_extractor()
 
@@ -227,7 +260,13 @@ def main() -> None:
         char_count = len(user_input)
         st.caption(f"{_format_number(char_count)} characters · ~{_format_number(char_count // 4)} tokens")
 
-        btn_label = "⚡ Optimize with AI" if use_llm else "⚡ Optimize Prompt"
+        if use_llm and backend == "groq":
+            btn_label = "⚡ Optimize with Groq AI"
+        elif use_llm and backend == "ollama":
+            btn_label = "⚡ Optimize with AI"
+        else:
+            btn_label = "⚡ Optimize Prompt"
+
         optimize_clicked = st.button(
             btn_label,
             type="primary",
@@ -248,8 +287,15 @@ def main() -> None:
             result = None
 
             if use_llm and model:
-                with st.spinner(f"Running 6-pass optimization with {model}…"):
-                    optimized_text = optimize_with_llm(user_input, model)
+                if backend == "groq":
+                    spinner_msg = f"Running 6-pass optimization with Groq ({model})…"
+                else:
+                    spinner_msg = f"Running 6-pass optimization with {model}…"
+                with st.spinner(spinner_msg):
+                    if backend == "groq":
+                        optimized_text = optimize_with_groq(user_input, groq_key, model)
+                    else:
+                        optimized_text = optimize_with_llm(user_input, model)
                     if optimized_text:
                         used_llm = True
 
@@ -293,7 +339,6 @@ def main() -> None:
                 )
 
             # Warnings (impossible requirements / contradictions fixed)
-            warnings    = st.session_state.get("warnings", [])
             impossible  = st.session_state.get("impossible", [])
             contradicts = st.session_state.get("contradictions", [])
 
