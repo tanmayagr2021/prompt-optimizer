@@ -22,6 +22,7 @@ from architect import (
     architect_with_groq,
     architect_with_ollama,
     parse_architect_output,
+    parse_quality_score,
 )
 from utils import calculate_stats
 
@@ -192,7 +193,7 @@ def render_architect_tab(use_llm, backend, model, groq_key):
         st.markdown('<p class="section-label">Generated Prompt</p>', unsafe_allow_html=True)
         if generate_clicked and user_request.strip() and use_llm:
             t0 = time.perf_counter()
-            spinner_msg = f"Running 6-phase architecture for {platform} via {'Groq' if backend=='groq' else 'Ollama'}…"
+            spinner_msg = f"Running 13-phase architecture for {platform} via {'Groq' if backend=='groq' else 'Ollama'}…"
             with st.spinner(spinner_msg):
                 if backend == "groq":
                     raw = architect_with_groq(user_request, platform, groq_key, model)
@@ -233,6 +234,32 @@ def render_architect_tab(use_llm, backend, model, groq_key):
             if parsed["enhancements"]:
                 with st.expander("✨ Enhancements Added"):
                     st.markdown(parsed["enhancements"])
+
+            if parsed.get("quality_score"):
+                with st.expander("🏆 Quality Score", expanded=True):
+                    qs = parse_quality_score(parsed["quality_score"])
+                    total = qs["total"]
+                    total_color = "#15803d" if total >= 95 else "#b45309" if total >= 80 else "#dc2626"
+                    st.markdown(
+                        f'<div style="font-size:1.8rem;font-weight:700;color:{total_color};margin-bottom:0.75rem;">'
+                        f'{total}/100'
+                        f'<span style="font-size:0.9rem;color:#6b7280;font-weight:400;margin-left:0.75rem;">'
+                        f'{"✅ Target reached" if total >= 95 else "⚠️ Below 95 target"}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+                    if qs["scores"]:
+                        cols = st.columns(5)
+                        for i, (label, val) in enumerate(qs["scores"].items()):
+                            color = "#15803d" if val >= 9 else "#b45309" if val >= 7 else "#dc2626"
+                            with cols[i % 5]:
+                                st.markdown(
+                                    f'<div class="stat-card">'
+                                    f'<div class="stat-value" style="color:{color};font-size:1.2rem;">{val}/10</div>'
+                                    f'<div class="stat-label">{label}</div></div>',
+                                    unsafe_allow_html=True,
+                                )
+                    else:
+                        st.markdown(parsed["quality_score"])
         else:
             st.markdown('<div style="color:#9ca3af;font-size:0.95rem;padding-top:2rem;">Your production-grade prompt will appear here.</div>', unsafe_allow_html=True)
 
