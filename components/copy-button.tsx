@@ -1,51 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface CopyButtonProps {
-  text: string;
-  className?: string;
-  label?: string;
-}
-
-export function CopyButton({ text, className, label = "Copy" }: CopyButtonProps) {
+export function CopyButton({ text, className, label = "Copy" }: { text: string; className?: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback for older browsers
       const el = document.createElement("textarea");
       el.value = text;
-      el.style.position = "fixed";
-      el.style.opacity = "0";
+      el.style.cssText = "position:fixed;opacity:0";
       document.body.appendChild(el);
       el.select();
       document.execCommand("copy");
       document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <button
       onClick={handleCopy}
       className={cn(
-        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold",
-        "transition-all duration-200",
+        "inline-flex items-center gap-1.5 font-sans text-label-sm uppercase tracking-wider px-3 py-1.5 rounded transition-all",
         copied
-          ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300"
-          : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700",
+          ? "bg-secondary-fixed text-on-secondary-fixed"
+          : "border border-ink dark:border-[#3d3a38] text-on-surface-variant hover:text-primary hover:border-primary dark:hover:border-primary-fixed-dim",
         className,
       )}
     >
-      {copied ? <Check size={12} /> : <Copy size={12} />}
+      <span className="material-symbols-outlined text-xs">{copied ? "check" : "content_copy"}</span>
       {copied ? "Copied!" : label}
     </button>
   );

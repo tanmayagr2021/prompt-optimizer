@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Wand2, Sparkles, AlertCircle } from "lucide-react";
 import { StatCard } from "./stat-card";
 import { InsightCard } from "./insight-card";
 import { TipCard } from "./tip-card";
 import { EmptyState } from "./empty-state";
 import { CopyButton } from "./copy-button";
-import { cn, fmt, calcStats, estimateTokens } from "@/lib/utils";
+import { cn, fmt, calcStats } from "@/lib/utils";
 import { getContextualTip } from "@/lib/guidance";
 import type { OptimizeResult } from "@/lib/types";
 
@@ -15,7 +14,7 @@ const EXAMPLES = [
   "Write me a blog post about AI",
   "Summarize this document for me",
   "Help me write an email to my team about the project deadline",
-  "Explain machine learning to me",
+  "Explain machine learning in simple terms",
   "Create a marketing campaign for my new product",
 ];
 
@@ -51,64 +50,45 @@ export function OptimizerTab() {
   const stats = rawStats ? {
     originalLen:  rawStats.origChars,
     optimizedLen: rawStats.optChars,
-    delta: rawStats.removed > 0 ? `-${fmt(rawStats.removed)} chars` : rawStats.removed < 0 ? `+${fmt(-rawStats.removed)} chars` : "Same length",
+    delta: rawStats.removed > 0 ? `-${fmt(rawStats.removed)} chars` : rawStats.removed < 0 ? `+${fmt(-rawStats.removed)} chars` : "Same",
     deltaGood: rawStats.removed >= 0,
     ratio: rawStats.origChars > 0 ? rawStats.optChars / rawStats.origChars : 1,
     pct: Math.round(rawStats.optChars / (rawStats.origChars || 1) * 100),
   } : null;
 
   return (
-    <div className="space-y-6">
-      {tip && (
-        <TipCard tip={tip} />
-      )}
+    <div className="space-y-10 animate-fade-in">
+      {tip && <TipCard tip={tip} />}
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Input */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Your Prompt
-            </label>
-            <div className="flex items-center gap-2">
-              <span className="text-[0.7rem] text-gray-400">{fmt(input.length)} chars</span>
-              <button
-                onClick={() => setInput("")}
-                className="text-[0.7rem] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-              >
-                Clear
-              </button>
-            </div>
+      {/* Editor canvas — mimics the Stitch writing desk */}
+      <div className="bg-surface-container-lowest dark:bg-[#25261f] p-8 md:p-12 border border-ink dark:border-[#3d3a38] rounded-xl paper-shadow relative">
+        <div className="absolute top-6 left-6 flex gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-primary/20" />
+          <span className="w-2 h-2 rounded-full bg-primary/20" />
+          <span className="w-2 h-2 rounded-full bg-primary/20" />
+        </div>
+
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="flex items-center justify-between border-b border-ink dark:border-[#3d3a38] pb-4">
+            <span className="font-serif text-headline-md text-on-surface/40 italic">Your prompt...</span>
+            <span className="text-label-sm text-on-surface-variant/60 uppercase tracking-widest">{fmt(input.length)} chars</span>
           </div>
+
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Paste or type your prompt here…"
-            className={cn(
-              "w-full h-56 resize-none rounded-xl border px-4 py-3 text-sm",
-              "font-mono leading-relaxed bg-white dark:bg-gray-900",
-              "border-gray-200 dark:border-gray-700",
-              "text-gray-800 dark:text-gray-200",
-              "placeholder:text-gray-400 dark:placeholder:text-gray-600",
-              "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent",
-              "transition-all",
-            )}
+            placeholder="Begin crafting your instructions here... Use [[variables]] for dynamic injection."
+            className="writing-surface w-full min-h-[280px] bg-transparent border-none focus:ring-0 p-0 font-sans text-body-lg leading-relaxed text-on-surface placeholder:text-outline-variant/40 resize-none"
           />
 
           {/* Example chips */}
           {!input && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {EXAMPLES.map((ex) => (
                 <button
                   key={ex}
                   onClick={() => setInput(ex)}
-                  className={cn(
-                    "text-[0.7rem] px-2.5 py-1 rounded-full border",
-                    "border-gray-200 dark:border-gray-700",
-                    "text-gray-500 dark:text-gray-400",
-                    "hover:border-indigo-400 hover:text-indigo-600 dark:hover:border-indigo-600 dark:hover:text-indigo-400",
-                    "transition-all",
-                  )}
+                  className="text-label-sm px-3 py-1 rounded-full border border-ink dark:border-[#3d3a38] text-on-surface-variant hover:border-primary hover:text-primary dark:hover:border-primary-fixed-dim transition-all"
                 >
                   {ex.length > 40 ? ex.slice(0, 38) + "…" : ex}
                 </button>
@@ -116,113 +96,100 @@ export function OptimizerTab() {
             </div>
           )}
 
-          <button
-            onClick={handleOptimize}
-            disabled={!input.trim() || loading}
-            className={cn(
-              "w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2",
-              "transition-all duration-200",
-              !input.trim() || loading
-                ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
-                : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow-md active:scale-[0.98]",
-            )}
-          >
-            {loading ? (
-              <>
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Optimizing…
-              </>
-            ) : (
-              <>
-                <Wand2 size={15} />
-                Optimize Prompt
-              </>
-            )}
-          </button>
+          <div className="flex items-center justify-between border-t border-ink dark:border-[#3d3a38] pt-6">
+            <button
+              onClick={() => { setInput(""); setResult(null); setError(""); }}
+              className="flex items-center gap-2 text-label-sm uppercase tracking-wider text-on-surface-variant hover:text-primary transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">history</span> Clear
+            </button>
 
-          {error && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-xs">
-              <AlertCircle size={13} className="mt-0.5 shrink-0" />
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* Output */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Optimized Prompt
-            </label>
-            {result && (
-              <div className="flex items-center gap-2">
-                <span className={cn(
-                  "text-[0.65rem] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
-                  result.mode === "ai"
-                    ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400",
-                )}>
-                  <Sparkles size={9} className="inline mr-0.5" />
-                  {result.mode === "ai" ? result.model ?? "AI" : "Rule-based"}
-                </span>
-                <CopyButton text={result.optimized} />
-              </div>
-            )}
+            <button
+              onClick={handleOptimize}
+              disabled={!input.trim() || loading}
+              className={cn(
+                "flex items-center gap-3 px-10 py-3.5 rounded-lg font-sans text-label-sm tracking-[0.2em] uppercase transition-all shadow-sm",
+                !input.trim() || loading
+                  ? "bg-surface-container text-on-surface-variant/40 cursor-not-allowed"
+                  : "bg-primary-container text-on-primary hover:scale-[1.02] active:scale-95 hover:shadow-md",
+              )}
+            >
+              {loading ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Optimizing…
+                </>
+              ) : (
+                <>
+                  Engineer Prompt
+                  <span className="material-symbols-outlined text-base">bolt</span>
+                </>
+              )}
+            </button>
           </div>
-
-          {result ? (
-            <div className={cn(
-              "h-56 overflow-auto rounded-xl border px-4 py-3",
-              "border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20",
-              "text-sm font-mono text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap",
-            )}>
-              {result.optimized}
-            </div>
-          ) : (
-            <EmptyState
-              icon="✨"
-              title="Your optimized prompt will appear here"
-              body="Paste any prompt on the left and click Optimize. The AI will restructure it for maximum clarity, specificity, and model compatibility."
-              className="h-56"
-            />
-          )}
-
-          {/* Stats row */}
-          {stats && (
-            <div className="grid grid-cols-3 gap-2">
-              <StatCard
-                value={fmt(stats.originalLen)}
-                label="Original chars"
-              />
-              <StatCard
-                value={fmt(stats.optimizedLen)}
-                label="Optimized chars"
-                delta={stats.delta}
-                deltaGood={stats.deltaGood}
-              />
-              <StatCard
-                value={`${stats.pct}%`}
-                label="Efficiency ratio"
-                delta={stats.ratio < 1 ? "Compressed" : "Expanded"}
-                deltaGood={stats.ratio <= 1}
-              />
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Insights */}
-      {result?.insights && result.insights.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
-            What changed &amp; why
-          </h3>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {result.insights.map((insight, i) => (
-              <InsightCard key={i} insight={insight} />
-            ))}
-          </div>
+      {/* Error */}
+      {error && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-error/30 bg-error-container/20 text-on-error-container text-sm">
+          <span className="material-symbols-outlined text-error text-base mt-0.5">error</span>
+          {error}
         </div>
+      )}
+
+      {/* Results */}
+      {result && (
+        <div className="space-y-8 animate-fade-in">
+          <div className="flex items-baseline justify-between mb-2">
+            <h2 className="font-serif text-headline-md text-on-surface">Optimized Prompt</h2>
+            <div className="flex items-center gap-3">
+              <span className="text-label-sm uppercase tracking-widest text-on-surface-variant/60">
+                {result.mode === "ai" ? result.model ?? "AI" : "Rule-based"}
+              </span>
+              <CopyButton text={result.optimized} />
+            </div>
+          </div>
+
+          {/* Output canvas */}
+          <div className="vellum-surface dark:bg-[#232420] border border-ink dark:border-[#3d3a38] rounded-xl p-8 md:p-10">
+            <pre className="font-sans text-body-md text-on-surface leading-relaxed whitespace-pre-wrap break-words">
+              {result.optimized}
+            </pre>
+          </div>
+
+          {/* Stats */}
+          {stats && (
+            <div className="grid grid-cols-3 gap-4">
+              <StatCard value={fmt(stats.originalLen)} label="Original chars" />
+              <StatCard value={fmt(stats.optimizedLen)} label="Optimized chars" delta={stats.delta} deltaGood={stats.deltaGood} />
+              <StatCard value={`${stats.pct}%`} label="Efficiency ratio" delta={stats.ratio <= 1 ? "Compressed" : "Expanded"} deltaGood={stats.ratio <= 1} />
+            </div>
+          )}
+
+          {/* Insights */}
+          {result.insights && result.insights.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-serif text-headline-md text-on-surface">Analysis &amp; Optimization</h3>
+                <span className="text-label-sm uppercase text-on-surface-variant/60">What changed &amp; why</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {result.insights.map((insight, i) => (
+                  <InsightCard key={i} insight={insight} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!result && !loading && (
+        <EmptyState
+          icon="✒️"
+          title="Your optimized prompt will appear here"
+          body="Paste any prompt above and click 'Engineer Prompt'. The AI will restructure it for maximum clarity, specificity, and model compatibility."
+        />
       )}
     </div>
   );

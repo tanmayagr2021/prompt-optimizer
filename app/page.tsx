@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Zap, Building2, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OptimizerTab } from "@/components/optimizer-tab";
 import { ArchitectTab } from "@/components/architect-tab";
@@ -10,9 +9,9 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 
 const TABS = [
-  { id: "optimizer", label: "Optimizer",  icon: Zap,       shortLabel: "Optimize" },
-  { id: "architect", label: "Architect",  icon: Building2, shortLabel: "Architect" },
-  { id: "learn",     label: "Learn",      icon: BookOpen,  shortLabel: "Learn" },
+  { id: "optimizer", label: "Workbench",  icon: "bolt" },
+  { id: "architect", label: "Architect",  icon: "architecture" },
+  { id: "learn",     label: "Library",    icon: "history_edu" },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -21,57 +20,50 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("optimizer");
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 antialiased">
+    <div className="min-h-screen bg-[#fbf9f4] dark:bg-[#1b1c19] antialiased">
       <Header />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-[1280px] mx-auto px-5 md:px-16 py-16">
         {/* Hero */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-full px-4 py-1.5 mb-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-              Powered by Groq LLaMA 3.3 70B
-            </span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100 mb-3">
-            PromptCraft
+        <div className="text-center mb-16 space-y-6">
+          <span className="text-label-sm uppercase tracking-[0.2em] text-secondary opacity-70">
+            The Art of the Instruction
+          </span>
+          <h1 className="font-serif text-display-mob md:text-display-lg text-on-surface tracking-tighter leading-tight">
+            Craft Better Prompts.
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
-            Transform rough prompts into precision-engineered instructions.
-            Architect platform-specific prompts from scratch. Learn from 30+ expert techniques.
+          <p className="text-body-lg text-on-surface-variant max-w-2xl mx-auto leading-relaxed opacity-80">
+            Turn rough ideas into beautifully engineered instructions. Precision, prestige, and power for the modern creative technologist.
           </p>
+          <div className="editorial-rule max-w-xs mx-auto" />
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-800 mb-8 gap-1">
-          {TABS.map(({ id, label, icon: Icon }) => (
+        {/* Tabs — editorial navigation */}
+        <div className="flex border-b border-ink dark:border-[#3d3a38] mb-12 gap-0">
+          {TABS.map(({ id, label, icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
               className={cn(
-                "relative flex items-center gap-2 px-4 py-3 text-sm font-semibold transition-colors",
-                "focus:outline-none",
+                "relative flex items-center gap-2 px-6 py-4 font-sans text-sm font-medium transition-colors",
                 activeTab === id
-                  ? "text-indigo-600 dark:text-indigo-400"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200",
+                  ? "text-primary dark:text-primary-fixed-dim"
+                  : "text-on-surface-variant/70 hover:text-on-surface",
               )}
             >
-              <Icon size={15} />
-              <span className="hidden sm:inline">{label}</span>
-              <span className="sm:hidden">{label}</span>
+              <span className="material-symbols-outlined text-base">{icon}</span>
+              {label}
               {activeTab === id && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-full" />
+                <span className="absolute bottom-0 left-0 right-0 h-px bg-primary dark:bg-primary-fixed-dim" />
               )}
             </button>
           ))}
         </div>
 
-        {/* Tab content */}
-        <div>
-          {activeTab === "optimizer" && <OptimizerTab />}
-          {activeTab === "architect" && <ArchitectTab />}
-          {activeTab === "learn"     && <LearnTab />}
-        </div>
+        {/* Content */}
+        {activeTab === "optimizer" && <OptimizerTab />}
+        {activeTab === "architect" && <ArchitectTab />}
+        {activeTab === "learn"     && <LearnTab />}
       </main>
 
       <Footer />

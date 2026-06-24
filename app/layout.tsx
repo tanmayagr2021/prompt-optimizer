@@ -1,31 +1,34 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Literata } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import { Providers } from "./providers";
 import "./globals.css";
 
-const inter = Inter({
+const literata = Literata({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-literata",
   display: "swap",
-});
-
-const jetbrains = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains",
-  display: "swap",
-  weight: ["400", "500"],
+  weight: "variable",
+  axes: ["opsz"],
 });
 
 export const metadata: Metadata = {
-  title: "Prompt Optimizer",
-  description: "Optimize prompts · Architect for any AI platform · Learn prompt engineering",
-  icons: { icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" },
+  title: "StingyPocketEngineer",
+  description: "Craft Better Prompts. Precision, prestige, and power for the modern creative technologist.",
+  icons: { icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✒️</text></svg>" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jetbrains.variable} font-sans antialiased`}>
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className={`${literata.variable} ${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

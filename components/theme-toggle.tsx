@@ -2,8 +2,6 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { Sun, Moon } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
@@ -11,11 +9,7 @@ export function ThemeToggle({ className }: { className?: string }) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  if (!mounted) {
-    return (
-      <div className={cn("w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse", className)} />
-    );
-  }
+  if (!mounted) return <div className="w-10 h-10 rounded-full border border-ink animate-pulse" />;
 
   const isDark = resolvedTheme === "dark";
 
@@ -23,15 +17,9 @@ export function ThemeToggle({ className }: { className?: string }) {
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className={cn(
-        "w-9 h-9 flex items-center justify-center rounded-lg",
-        "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100",
-        "bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700",
-        "transition-all duration-200",
-        className,
-      )}
+      className={`w-10 h-10 rounded-full border border-ink dark:border-[#3d3a38] flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary dark:hover:border-primary-fixed-dim transition-all ${className ?? ""}`}
     >
-      {isDark ? <Sun size={16} /> : <Moon size={16} />}
+      <span className="material-symbols-outlined text-sm">{isDark ? "light_mode" : "dark_mode"}</span>
     </button>
   );
 }

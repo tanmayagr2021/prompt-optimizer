@@ -1,35 +1,33 @@
 import { ThemeToggle } from "./theme-toggle";
-import { Zap } from "lucide-react";
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
-            <Zap size={16} className="text-white" />
-          </div>
-          <div>
-            <span className="text-sm font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-              PromptCraft
-            </span>
-            <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500 ml-2">
-              AI Prompt Optimizer
-            </span>
-          </div>
+    <header className="sticky top-0 z-50 bg-surface/80 dark:bg-[#1b1c19]/80 backdrop-blur-md border-b border-outline-variant/30 transition-all duration-300">
+      <div className="flex justify-between items-center w-full px-5 md:px-16 py-5 max-w-[1280px] mx-auto">
+        <div className="font-serif text-headline-lg font-semibold text-primary dark:text-primary-fixed-dim tracking-tighter">
+          StingyPocketEngineer
         </div>
 
-        <div className="flex items-center gap-3">
-          <a
-            href="https://console.groq.com"
-            target="_blank"
-            rel="noreferrer"
-            className="hidden sm:inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Powered by Groq
+        <nav className="hidden md:flex items-center gap-10">
+          <a className="text-primary dark:text-primary-fixed-dim font-semibold border-b border-primary dark:border-primary-fixed-dim pb-0.5 font-sans text-sm">
+            Workbench
           </a>
+          <a className="text-on-surface-variant/70 font-medium hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-300 font-sans text-sm cursor-pointer">
+            Library
+          </a>
+          <a className="text-on-surface-variant/70 font-medium hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-300 font-sans text-sm cursor-pointer">
+            Models
+          </a>
+          <a className="text-on-surface-variant/70 font-medium hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-300 font-sans text-sm cursor-pointer">
+            Archive
+          </a>
+        </nav>
+
+        <div className="flex items-center gap-4">
           <ThemeToggle />
+          <button className="bg-primary-container text-on-primary px-5 py-2 rounded-lg font-sans text-label-sm tracking-widest uppercase hover:opacity-90 active:scale-95 transition-all text-xs">
+            New Prompt
+          </button>
         </div>
       </div>
     </header>
