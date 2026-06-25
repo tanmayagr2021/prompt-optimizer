@@ -4,14 +4,16 @@ import { cn } from "@/lib/utils";
 import { OptimizerTab } from "@/components/optimizer-tab";
 import { ArchitectTab } from "@/components/architect-tab";
 import { LearnTab } from "@/components/learn-tab";
+import { ConvertTab } from "@/components/convert-tab";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { useTab } from "@/lib/tab-context";
 
 const TABS = [
-  { id: "optimizer", label: "Workbench",  icon: "bolt" },
-  { id: "architect", label: "Architect",  icon: "architecture" },
-  { id: "learn",     label: "Library",    icon: "history_edu" },
+  { id: "optimizer",  label: "Workbench",  icon: "bolt" },
+  { id: "architect",  label: "Architect",  icon: "architecture" },
+  { id: "converter",  label: "Converter",  icon: "swap_horiz" },
+  { id: "learn",      label: "Library",    icon: "history_edu" },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -61,9 +63,10 @@ export default function Home() {
         </div>
 
         {/* Content */}
-        {activeTab === "optimizer" && <OptimizerTab />}
-        {activeTab === "architect" && <ArchitectTab />}
-        {activeTab === "learn"     && <LearnTab />}
+        {activeTab === "optimizer"  && <OptimizerTab />}
+        {activeTab === "architect"  && <ArchitectTab />}
+        {activeTab === "converter"  && <ConvertTab />}
+        {activeTab === "learn"      && <LearnTab />}
       </main>
 
       <Footer />

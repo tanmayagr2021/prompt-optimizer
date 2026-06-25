@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState } from "react";
 
-export type TabId = "optimizer" | "architect" | "learn";
+export type TabId = "optimizer" | "architect" | "learn" | "converter";
 
 interface TabContextValue {
   activeTab: TabId;

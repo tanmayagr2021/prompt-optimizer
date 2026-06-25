@@ -6,9 +6,10 @@ import { useTab } from "@/lib/tab-context";
 import type { TabId } from "@/lib/tab-context";
 
 const NAV: { id: TabId; label: string }[] = [
-  { id: "optimizer", label: "Workbench" },
-  { id: "architect", label: "Architect" },
-  { id: "learn",     label: "Library"   },
+  { id: "optimizer",  label: "Workbench"  },
+  { id: "architect",  label: "Architect"  },
+  { id: "converter",  label: "Converter"  },
+  { id: "learn",      label: "Library"    },
 ];
 
 export function Header() {
