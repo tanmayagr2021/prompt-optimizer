@@ -100,23 +100,17 @@ export async function extractContent(
   }
 }
 
-// pdf-parse v2 uses a class-based API: new PDFParse({ data }).getText()
-// v1 was pdfParse(buffer) — that call no longer works.
+// Uses pdf-parse@1.1.1 (pdfjs-dist@2.x) — works in Node.js without browser polyfills.
+// Import from lib/ directly to skip the index.js test-file loader.
 async function extractPDF(buffer: Buffer): Promise<ExtractResult> {
   try {
-    type PDFParseClass = new (opts: { data: Buffer }) => {
-      getText(params?: Record<string, unknown>): Promise<{ text: string; total: number }>;
-      destroy(): Promise<void>;
-    };
-    const { PDFParse } = require("pdf-parse") as { PDFParse: PDFParseClass };
-    const parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
-    const pages = result.total;
-    await parser.destroy();
-    return { text: result.text.trim(), meta: { pages: String(pages) } };
+    type PDFParseV1 = (buf: Buffer) => Promise<{ text: string; numpages: number }>;
+    const pdfParse = require("pdf-parse/lib/pdf-parse") as PDFParseV1;
+    const data = await pdfParse(buffer);
+    return { text: data.text.trim(), meta: { pages: String(data.numpages) } };
   } catch (err) {
     return {
-      text: `[PDF extraction failed: ${err instanceof Error ? err.message : String(err)}. The file may be image-only or password-protected — upload it as an image instead for OCR.]`,
+      text: `[PDF extraction failed: ${err instanceof Error ? err.message : String(err)}. The file may be image-only or password-protected — try uploading it as an image for OCR.]`,
     };
   }
 }
