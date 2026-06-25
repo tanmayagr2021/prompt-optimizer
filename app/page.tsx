@@ -22,7 +22,7 @@ export default function Home() {
   const { activeTab, setActiveTab } = useTab();
 
   return (
-    <div className="min-h-screen bg-[#fbf9f4] dark:bg-[#1b1c19] antialiased">
+    <div className="min-h-screen bg-background antialiased">
       <Header />
 
       <main className="max-w-[1280px] mx-auto px-5 md:px-16 py-16">

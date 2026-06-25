@@ -16,7 +16,7 @@ export function Header() {
   const { activeTab, setActiveTab } = useTab();
 
   return (
-    <header className="sticky top-0 z-50 bg-surface/80 dark:bg-[#1b1c19]/80 backdrop-blur-md border-b border-outline-variant/30 transition-all duration-300">
+    <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 transition-all duration-300">
       <div className="flex justify-between items-center w-full px-5 md:px-16 py-5 max-w-[1280px] mx-auto">
         <button
           onClick={() => setActiveTab("optimizer")}

@@ -60,7 +60,11 @@ export async function POST(req: NextRequest) {
   }
 
   const baseName = file.name.replace(/\.[^.]+$/, "");
-  const stats = docStats(extracted.text, extracted.text);
+  // Second arg is the generated text for word/char count comparison; for binary formats use extracted.text as proxy
+  const generatedText = ["docx", "pdf"].includes(outputFormat)
+    ? extracted.text
+    : generated.data.toString("utf-8");
+  const stats = docStats(extracted.text, generatedText);
 
   return NextResponse.json({
     text:         extracted.text,

@@ -3,7 +3,7 @@ export function Footer() {
     <footer className="bg-surface-container-low dark:bg-[#232420] border-t border-outline-variant/20 mt-20">
       <div className="flex flex-col md:flex-row justify-between items-center w-full px-5 md:px-16 py-16 max-w-[1280px] mx-auto gap-10 md:gap-0">
         <div className="text-center md:text-left space-y-3">
-          <div className="font-serif text-headline-md text-on-surface dark:text-inverse-on-surface">
+          <div className="font-serif text-headline-md text-on-surface">
             StingyPocketEngineer
           </div>
           <p className="text-sm text-tertiary opacity-70">

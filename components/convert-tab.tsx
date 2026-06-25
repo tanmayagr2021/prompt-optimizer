@@ -61,7 +61,7 @@ interface ConvertResult {
   stats: { inputChars: number; outputChars: number; inputWords: number; outputWords: number };
 }
 
-type Stage = "idle" | "ready" | "converting" | "done" | "enhancing";
+type Stage = "idle" | "ready" | "converting" | "done" | "enhancing" | "redownloading";
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -162,21 +162,50 @@ export function ConvertTab() {
 
   // ── Download ────────────────────────────────────────────────────────────────
 
-  const handleDownload = (useEnhancedText = false) => {
+  const isBinaryFormat = (fmt: string) => fmt === "docx" || fmt === "pdf";
+
+  function downloadBinary(base64: string, mimeType: string, fileName: string) {
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    triggerDownload(new Blob([arr], { type: mimeType }), fileName);
+  }
+
+  const handleDownload = async (useEnhancedText = false) => {
     if (!result) return;
     const content = useEnhancedText && enhanced ? enhanced : null;
 
-    if (content) {
-      // Download enhanced text as the original output format (text-based)
-      const textFormats: Record<string, string> = { md: "text/markdown", html: "text/html", txt: "text/plain", csv: "text/csv", json: "application/json", xml: "application/xml" };
+    if (content && isBinaryFormat(outputFormat)) {
+      // Re-convert enhanced text through the API to generate a fresh binary file
+      setStage("redownloading");
+      setError("");
+      try {
+        const blob = new Blob([content], { type: "text/plain" });
+        const enhFile = new File([blob], "enhanced.txt");
+        const fd = new FormData();
+        fd.append("file", enhFile);
+        fd.append("outputFormat", outputFormat);
+        const res = await fetch("/api/convert", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Re-conversion failed");
+        const baseName = result.fileName.replace(/\.[^.]+$/, "");
+        downloadBinary(data.outputBase64, data.mimeType, `${baseName}-enhanced.${data.ext}`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Download failed");
+      } finally {
+        setStage("done");
+      }
+    } else if (content) {
+      // Text-based format: download enhanced text directly
+      const textFormats: Record<string, string> = {
+        md: "text/markdown", html: "text/html", txt: "text/plain",
+        csv: "text/csv", json: "application/json", xml: "application/xml",
+      };
       const mime = textFormats[outputFormat] ?? "text/plain";
-      const blob = new Blob([content], { type: mime });
-      triggerDownload(blob, `${result.fileName.replace(/\.[^.]+$/, "")}-enhanced.${outputFormat}`);
+      const textBlob = new Blob([content], { type: mime });
+      triggerDownload(textBlob, `${result.fileName.replace(/\.[^.]+$/, "")}-enhanced.${outputFormat}`);
     } else {
-      const bytes = atob(result.outputBase64);
-      const arr = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-      triggerDownload(new Blob([arr], { type: result.mimeType }), result.fileName);
+      downloadBinary(result.outputBase64, result.mimeType, result.fileName);
     }
   };
 
@@ -191,9 +220,10 @@ export function ConvertTab() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  const converting = stage === "converting";
-  const enhancing  = stage === "enhancing";
-  const busy       = converting || enhancing;
+  const converting    = stage === "converting";
+  const enhancing     = stage === "enhancing";
+  const redownloading = stage === "redownloading";
+  const busy          = converting || enhancing || redownloading;
 
   const displayText = enhanced ?? result?.text ?? "";
 
@@ -414,10 +444,23 @@ export function ConvertTab() {
                 <CopyButton text={displayText} />
                 <button
                   onClick={() => handleDownload(!!enhanced)}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary-container text-on-primary text-label-sm uppercase tracking-widest rounded-lg hover:opacity-90 active:scale-95 transition-all text-xs"
+                  disabled={redownloading}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 bg-primary-container text-on-primary text-label-sm uppercase tracking-widest rounded-lg transition-all text-xs",
+                    redownloading ? "opacity-60 cursor-not-allowed" : "hover:opacity-90 active:scale-95",
+                  )}
                 >
-                  <span className="material-symbols-outlined text-sm">download</span>
-                  Download {outputFormat.toUpperCase()}
+                  {redownloading ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Generating…
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-sm">download</span>
+                      Download {outputFormat.toUpperCase()}
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -11,3 +11,4 @@ venv/
 out/
 node_modules/
 *.tsbuildinfo
+.vercel
