@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { StatCard } from "./stat-card";
 import { InsightCard } from "./insight-card";
 import { TipCard } from "./tip-card";
@@ -8,6 +8,7 @@ import { EmptyState } from "./empty-state";
 import { CopyButton } from "./copy-button";
 import { cn, fmt, calcStats } from "@/lib/utils";
 import { getContextualTip } from "@/lib/guidance";
+import { GROQ_MODELS } from "@/lib/prompts";
 import type { OptimizeResult } from "@/lib/types";
 
 const EXAMPLES = [
@@ -20,11 +21,12 @@ const EXAMPLES = [
 
 export function OptimizerTab() {
   const [input, setInput]   = useState("");
+  const [model, setModel]   = useState<string>(GROQ_MODELS[0]);
   const [result, setResult] = useState<OptimizeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState("");
 
-  const tip = getContextualTip("optimizer", "");
+  const tip = useMemo(() => getContextualTip("optimizer", ""), []);
 
   const handleOptimize = async () => {
     if (!input.trim()) return;
@@ -34,7 +36,7 @@ export function OptimizerTab() {
       const res = await fetch("/api/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: input }),
+        body: JSON.stringify({ prompt: input, model }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Optimization failed");
@@ -56,11 +58,19 @@ export function OptimizerTab() {
     pct: Math.round(rawStats.optChars / (rawStats.origChars || 1) * 100),
   } : null;
 
+  const modeLabel = result
+    ? result.mode.startsWith("ai")
+      ? result.model ?? "AI"
+      : "Rule-based"
+    : "";
+
+  const tokenCount = Math.ceil(input.length / 4);
+
   return (
     <div className="space-y-10 animate-fade-in">
       {tip && <TipCard tip={tip} />}
 
-      {/* Editor canvas — mimics the Stitch writing desk */}
+      {/* Editor canvas */}
       <div className="bg-surface-container-lowest dark:bg-[#25261f] p-8 md:p-12 border border-ink dark:border-[#3d3a38] rounded-xl paper-shadow relative">
         <div className="absolute top-6 left-6 flex gap-1.5">
           <span className="w-2 h-2 rounded-full bg-primary/20" />
@@ -70,14 +80,16 @@ export function OptimizerTab() {
 
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="flex items-center justify-between border-b border-ink dark:border-[#3d3a38] pb-4">
-            <span className="font-serif text-headline-md text-on-surface/40 italic">Your prompt...</span>
-            <span className="text-label-sm text-on-surface-variant/60 uppercase tracking-widest">{fmt(input.length)} chars</span>
+            <span className="font-serif text-headline-md text-on-surface/40 italic">Your prompt…</span>
+            <span className="text-label-sm text-on-surface-variant/60 uppercase tracking-widest">
+              {fmt(input.length)} chars · ~{fmt(tokenCount)} tokens
+            </span>
           </div>
 
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Begin crafting your instructions here... Use [[variables]] for dynamic injection."
+            placeholder="Begin crafting your instructions here… Use [[variables]] for dynamic injection."
             className="writing-surface w-full min-h-[280px] bg-transparent border-none focus:ring-0 p-0 font-sans text-body-lg leading-relaxed text-on-surface placeholder:text-outline-variant/40 resize-none"
           />
 
@@ -97,12 +109,26 @@ export function OptimizerTab() {
           )}
 
           <div className="flex items-center justify-between border-t border-ink dark:border-[#3d3a38] pt-6">
-            <button
-              onClick={() => { setInput(""); setResult(null); setError(""); }}
-              className="flex items-center gap-2 text-label-sm uppercase tracking-wider text-on-surface-variant hover:text-primary transition-colors"
-            >
-              <span className="material-symbols-outlined text-sm">history</span> Clear
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => { setInput(""); setResult(null); setError(""); }}
+                className="flex items-center gap-2 text-label-sm uppercase tracking-wider text-on-surface-variant hover:text-primary transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">close</span> Clear
+              </button>
+
+              {/* Model selector */}
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="bg-transparent border-none text-label-sm text-on-surface-variant/60 cursor-pointer outline-none hover:text-on-surface transition-colors"
+                title="Select model"
+              >
+                {GROQ_MODELS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
 
             <button
               onClick={handleOptimize}
@@ -117,7 +143,7 @@ export function OptimizerTab() {
               {loading ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Optimizing…
+                  Optimising…
                 </>
               ) : (
                 <>
@@ -142,10 +168,10 @@ export function OptimizerTab() {
       {result && (
         <div className="space-y-8 animate-fade-in">
           <div className="flex items-baseline justify-between mb-2">
-            <h2 className="font-serif text-headline-md text-on-surface">Optimized Prompt</h2>
+            <h2 className="font-serif text-headline-md text-on-surface">Optimised Prompt</h2>
             <div className="flex items-center gap-3">
               <span className="text-label-sm uppercase tracking-widest text-on-surface-variant/60">
-                {result.mode === "ai" ? result.model ?? "AI" : "Rule-based"}
+                {modeLabel}
               </span>
               <CopyButton text={result.optimized} />
             </div>
@@ -162,7 +188,7 @@ export function OptimizerTab() {
           {stats && (
             <div className="grid grid-cols-3 gap-4">
               <StatCard value={fmt(stats.originalLen)} label="Original chars" />
-              <StatCard value={fmt(stats.optimizedLen)} label="Optimized chars" delta={stats.delta} deltaGood={stats.deltaGood} />
+              <StatCard value={fmt(stats.optimizedLen)} label="Optimised chars" delta={stats.delta} deltaGood={stats.deltaGood} />
               <StatCard value={`${stats.pct}%`} label="Efficiency ratio" delta={stats.ratio <= 1 ? "Compressed" : "Expanded"} deltaGood={stats.ratio <= 1} />
             </div>
           )}
@@ -171,7 +197,7 @@ export function OptimizerTab() {
           {result.insights && result.insights.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h3 className="font-serif text-headline-md text-on-surface">Analysis &amp; Optimization</h3>
+                <h3 className="font-serif text-headline-md text-on-surface">Analysis &amp; Optimisation</h3>
                 <span className="text-label-sm uppercase text-on-surface-variant/60">What changed &amp; why</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -187,7 +213,7 @@ export function OptimizerTab() {
       {!result && !loading && (
         <EmptyState
           icon="✒️"
-          title="Your optimized prompt will appear here"
+          title="Your optimised prompt will appear here"
           body="Paste any prompt above and click 'Engineer Prompt'. The AI will restructure it for maximum clarity, specificity, and model compatibility."
         />
       )}

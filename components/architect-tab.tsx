@@ -1,15 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { TipCard } from "./tip-card";
 import { EmptyState } from "./empty-state";
 import { CopyButton } from "./copy-button";
-import { cn } from "@/lib/utils";
+import { cn, fmt } from "@/lib/utils";
 import { getContextualTip } from "@/lib/guidance";
 import { PLATFORMS, PLATFORM_META, GROQ_MODELS } from "@/lib/prompts";
 import type { ArchitectResult } from "@/lib/types";
 
-const SCORE_LABELS = ["Specificity", "Structure", "AI Optimization", "Completeness", "Clarity", "Success Probability"];
+const SCORE_DIMENSIONS = [
+  "Specificity",
+  "Structure",
+  "AI Optimization",
+  "Completeness",
+  "Clarity",
+  "Success Probability",
+];
+
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const clamped = Math.max(0, Math.min(100, value));
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between items-center">
+        <span className="text-[11px] uppercase tracking-widest text-on-surface-variant/70">{label}</span>
+        <span className="text-[11px] font-semibold text-on-surface">{clamped}</span>
+      </div>
+      <div className="w-full h-1 bg-outline-variant/30 rounded-full overflow-hidden">
+        <div
+          className={cn(
+            "h-full rounded-full transition-all duration-700",
+            clamped >= 85 ? "bg-secondary" : clamped >= 65 ? "bg-primary" : "bg-error",
+          )}
+          style={{ width: `${clamped}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function ArchitectTab() {
   const [request, setRequest]   = useState("");
@@ -19,7 +47,7 @@ export function ArchitectTab() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
 
-  const tip = getContextualTip("architect", platform);
+  const tip = useMemo(() => getContextualTip("architect", platform), [platform]);
 
   const handleGenerate = async () => {
     if (!request.trim()) return;
@@ -40,6 +68,10 @@ export function ArchitectTab() {
       setLoading(false);
     }
   };
+
+  const scoreEntries = result
+    ? SCORE_DIMENSIONS.map((dim) => ({ label: dim, value: result.scores?.[dim] ?? 0 })).filter((e) => e.value > 0)
+    : [];
 
   return (
     <div className="space-y-10 animate-fade-in">
@@ -104,18 +136,20 @@ export function ArchitectTab() {
         <section className="space-y-6">
           {/* Writing canvas */}
           <div className="bg-surface-container-lowest dark:bg-[#25261f] p-8 border border-ink dark:border-[#3d3a38] rounded-xl paper-shadow">
-            <input
-              value={request}
-              onChange={(e) => setRequest(e.target.value)}
-              placeholder="Describe your task in plain language..."
-              className="w-full font-serif text-headline-md bg-transparent border-none focus:ring-0 mb-6 p-0 text-on-surface placeholder:text-outline-variant/40 outline-none"
-            />
+            <div className="flex items-center justify-between border-b border-ink dark:border-[#3d3a38] pb-4 mb-6">
+              <span className="font-serif text-headline-md text-on-surface/40 italic">Describe your task…</span>
+              <span className="text-label-sm text-on-surface-variant/60 uppercase tracking-widest">
+                {fmt(request.length)} chars
+              </span>
+            </div>
+
             <textarea
               value={request}
               onChange={(e) => setRequest(e.target.value)}
-              placeholder={`e.g. "Analyze a Python codebase for security vulnerabilities and produce an editorial-style audit report for ${platform}"`}
-              className="writing-surface w-full min-h-[160px] bg-transparent border-none focus:ring-0 p-0 font-sans text-body-md leading-relaxed text-on-surface placeholder:text-outline-variant/30 resize-none"
+              placeholder={`e.g. "Analyse a Python codebase for security vulnerabilities and produce an editorial-style audit report for ${platform}"`}
+              className="writing-surface w-full min-h-[180px] bg-transparent border-none focus:ring-0 p-0 font-sans text-body-md leading-relaxed text-on-surface placeholder:text-outline-variant/30 resize-none"
             />
+
             <div className="border-t border-ink dark:border-[#3d3a38] pt-5 flex justify-end">
               <button
                 onClick={handleGenerate}
@@ -161,15 +195,9 @@ export function ArchitectTab() {
                 <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
                 <h4 className="text-label-sm uppercase tracking-widest text-on-surface">Intent Analysis</h4>
               </div>
-              <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-4">{result.analysis || "Platform-specific prompt architecture applied."}</p>
-              {result.total > 0 && (
-                <div className="mt-5 pt-5 border-t border-outline-variant/20">
-                  <div className="w-full h-1 bg-outline-variant/30 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${result.total}%` }} />
-                  </div>
-                  <span className="text-[10px] uppercase text-on-surface-variant mt-1.5 block">Quality Score: {result.total}%</span>
-                </div>
-              )}
+              <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-4">
+                {result.analysis || "Platform-specific prompt architecture applied."}
+              </p>
             </div>
 
             {/* Enhancements card */}
@@ -192,18 +220,34 @@ export function ArchitectTab() {
               <div className="bg-primary text-on-primary p-8 border border-primary-container rounded-lg hover:scale-[1.01] transition-transform">
                 <div className="flex items-center gap-3 mb-5">
                   <span className="material-symbols-outlined">verified</span>
-                  <h4 className="text-label-sm uppercase tracking-widest">Efficiency Rating</h4>
+                  <h4 className="text-label-sm uppercase tracking-widest">Quality Score</h4>
                 </div>
                 <div className="flex items-end gap-2 mb-3">
                   <span className="font-serif text-5xl font-bold">{result.total}</span>
-                  <span className="font-serif text-xl opacity-60 mb-1">/100</span>
+                  <span className="font-serif text-xl opacity-60 mb-1">/ 100</span>
                 </div>
                 <p className="text-sm text-on-primary-container">
-                  {result.total >= 80 ? "Highly optimized prompt." : "Good — minor improvements possible."}
+                  {result.total >= 90
+                    ? "Exceptional — production ready."
+                    : result.total >= 80
+                    ? "Highly optimised — minor improvements possible."
+                    : "Good — consider refining specificity."}
                 </p>
               </div>
             )}
           </div>
+
+          {/* Per-dimension score bars */}
+          {scoreEntries.length > 0 && (
+            <div className="luxury-card p-8 rounded-xl space-y-5">
+              <h4 className="text-label-sm uppercase tracking-[0.2em] text-on-surface-variant/60">Dimension Breakdown</h4>
+              <div className="grid sm:grid-cols-2 gap-x-12 gap-y-5">
+                {scoreEntries.map(({ label, value }) => (
+                  <ScoreBar key={label} label={label} value={value} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Generated prompt */}
           <div>
@@ -224,7 +268,7 @@ export function ArchitectTab() {
         <EmptyState
           icon="🏗️"
           title="Your architected prompt will appear here"
-          body={`Describe your task and select a target platform. The 7-phase AI pipeline will craft a production-ready prompt optimized for ${platform}.`}
+          body={`Describe your task and select a target platform. The 7-phase AI pipeline will craft a production-ready prompt optimised for ${platform}.`}
         />
       )}
     </div>

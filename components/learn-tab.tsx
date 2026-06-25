@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { TipCard } from "./tip-card";
 import { cn } from "@/lib/utils";
 import { getRandomTips, LEARN_CONTENT } from "@/lib/guidance";
@@ -65,7 +65,7 @@ function ArticleCard({ item }: { item: LearnItem }) {
 
 export function LearnTab() {
   const [activeCategory, setActiveCategory] = useState(CATEGORIES[0]);
-  const tips = getRandomTips(3);
+  const tips = useMemo(() => getRandomTips(3), []);
   const articles = LEARN_CONTENT[activeCategory] ?? [];
 
   return (

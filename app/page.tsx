@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { OptimizerTab } from "@/components/optimizer-tab";
 import { ArchitectTab } from "@/components/architect-tab";
 import { LearnTab } from "@/components/learn-tab";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { useTab } from "@/lib/tab-context";
 
 const TABS = [
   { id: "optimizer", label: "Workbench",  icon: "bolt" },
@@ -17,7 +17,7 @@ const TABS = [
 type TabId = typeof TABS[number]["id"];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabId>("optimizer");
+  const { activeTab, setActiveTab } = useTab();
 
   return (
     <div className="min-h-screen bg-[#fbf9f4] dark:bg-[#1b1c19] antialiased">
@@ -43,7 +43,7 @@ export default function Home() {
           {TABS.map(({ id, label, icon }) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id)}
+              onClick={() => setActiveTab(id as TabId)}
               className={cn(
                 "relative flex items-center gap-2 px-6 py-4 font-sans text-sm font-medium transition-colors",
                 activeTab === id

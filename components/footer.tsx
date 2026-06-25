@@ -7,7 +7,7 @@ export function Footer() {
             StingyPocketEngineer
           </div>
           <p className="text-sm text-tertiary opacity-70">
-            © 2024 StingyPocketEngineer. Crafted for the discerning technologist.
+            © 2025 StingyPocketEngineer. Crafted for the discerning technologist.
           </p>
           <a
             href="mailto:tanmayagr2021@gmail.com"

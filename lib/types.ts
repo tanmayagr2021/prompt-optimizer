@@ -9,9 +9,9 @@ export interface Insight {
 export interface OptimizeResult {
   optimized: string;
   insights: Insight[];
-  mode: "ai" | "rule";
+  mode: string;
   model?: string;
-  elapsed: number;
+  elapsed?: number;
 }
 
 export interface ArchitectResult {
