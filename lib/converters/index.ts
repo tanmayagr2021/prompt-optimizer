@@ -1,5 +1,6 @@
 // Universal document conversion engine.
 // All heavy libraries loaded dynamically — reduces cold-start overhead on Vercel.
+// CJS libraries loaded via require(); ESM-only libraries (marked) via await import().
 
 export interface ExtractResult {
   text: string;
@@ -92,34 +93,40 @@ export async function extractContent(
     case "json":  return extractJSON(buffer);
     case "xml":   return { text: buffer.toString("utf-8") };
     case "image":
-      if (!groqKey) {
-        return { text: "[Image OCR requires GROQ_API_KEY in environment variables.]" };
-      }
+      if (!groqKey) return { text: "[Image OCR requires GROQ_API_KEY in environment variables.]" };
       return extractImageOCR(buffer, groqKey);
     default:
       return { text: buffer.toString("utf-8") };
   }
 }
 
+// pdf-parse v2 uses a class-based API: new PDFParse({ data }).getText()
+// v1 was pdfParse(buffer) — that call no longer works.
 async function extractPDF(buffer: Buffer): Promise<ExtractResult> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string; numpages: number }>;
-    const data = await pdfParse(buffer);
-    return { text: data.text.trim(), meta: { pages: String(data.numpages) } };
-  } catch {
+    type PDFParseClass = new (opts: { data: Buffer }) => {
+      getText(params?: Record<string, unknown>): Promise<{ text: string; total: number }>;
+      destroy(): Promise<void>;
+    };
+    const { PDFParse } = require("pdf-parse") as { PDFParse: PDFParseClass };
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    const pages = result.total;
+    await parser.destroy();
+    return { text: result.text.trim(), meta: { pages: String(pages) } };
+  } catch (err) {
     return {
-      text: "[PDF text extraction failed. The file may be image-only or password-protected. Try uploading as an image for OCR.]",
+      text: `[PDF extraction failed: ${err instanceof Error ? err.message : String(err)}. The file may be image-only or password-protected — upload it as an image instead for OCR.]`,
     };
   }
 }
 
 async function extractDOCX(buffer: Buffer): Promise<ExtractResult> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mammoth = require("mammoth") as {
-    extractRawText: (o: { buffer: Buffer }) => Promise<{ value: string }>;
-    convertToHtml:  (o: { buffer: Buffer }) => Promise<{ value: string }>;
+  type Mammoth = {
+    extractRawText(o: { buffer: Buffer }): Promise<{ value: string }>;
+    convertToHtml(o: { buffer: Buffer }): Promise<{ value: string }>;
   };
+  const mammoth = require("mammoth") as Mammoth;
   const [raw, htmlRes] = await Promise.all([
     mammoth.extractRawText({ buffer }),
     mammoth.convertToHtml({ buffer }),
@@ -128,7 +135,7 @@ async function extractDOCX(buffer: Buffer): Promise<ExtractResult> {
 }
 
 function extractDOC(buffer: Buffer): ExtractResult {
-  // Binary .doc: salvage readable ASCII fragments (crude but often effective for simple files)
+  // Binary .doc: salvage ASCII text segments (crude but often effective for simple files)
   const str = buffer.toString("latin1");
   const text = str
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\xFF]/g, " ")
@@ -145,7 +152,11 @@ function extractDOC(buffer: Buffer): ExtractResult {
 }
 
 async function extractPPTX(buffer: Buffer): Promise<ExtractResult> {
-  const JSZip = (await import("jszip")).default;
+  // PPTX files are ZIP archives — slide text lives in ppt/slides/slideN.xml <a:t> elements
+  const JSZip = require("jszip") as { loadAsync(data: Buffer): Promise<JSZipInstance> };
+  type JSZipInstance = {
+    files: Record<string, { async(type: "string"): Promise<string> }>;
+  };
   const zip = await JSZip.loadAsync(buffer);
 
   const slideFiles = Object.keys(zip.files)
@@ -172,7 +183,11 @@ async function extractPPTX(buffer: Buffer): Promise<ExtractResult> {
 }
 
 async function extractXLSX(buffer: Buffer): Promise<ExtractResult> {
-  const XLSX = await import("xlsx");
+  type XLSXMod = {
+    read(data: Buffer, opts: { type: "buffer" }): { SheetNames: string[]; Sheets: Record<string, unknown> };
+    utils: { sheet_to_csv(sheet: unknown): string };
+  };
+  const XLSX = require("xlsx") as XLSXMod;
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const parts: string[] = [];
 
@@ -187,30 +202,38 @@ async function extractXLSX(buffer: Buffer): Promise<ExtractResult> {
 
 async function extractMarkdown(buffer: Buffer): Promise<ExtractResult> {
   const text = buffer.toString("utf-8");
+  // marked is ESM-only — must use await import()
   const { marked } = await import("marked");
-  const html = await marked(text);
+  const html = String(await marked(text));
   return { text, html };
 }
 
 async function extractHTML(buffer: Buffer): Promise<ExtractResult> {
   const html = buffer.toString("utf-8");
-  const TurndownService = (await import("turndown")).default;
+  // turndown is CJS — require() is safe
+  type TurndownCtor = new (opts: Record<string, unknown>) => { turndown(html: string): string };
+  const TurndownService = require("turndown") as TurndownCtor;
   const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
   const text = td.turndown(html);
   return { text, html };
 }
 
 async function extractEPUB(buffer: Buffer): Promise<ExtractResult> {
-  const JSZip = (await import("jszip")).default;
-  const TurndownService = (await import("turndown")).default;
-  const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
+  type JSZipInstance = {
+    files: Record<string, { async(type: "string"): Promise<string> }>;
+  };
+  const JSZip = require("jszip") as { loadAsync(data: Buffer): Promise<JSZipInstance> };
+  type TurndownCtor = new (opts: Record<string, unknown>) => { turndown(html: string): string };
+  const TurndownService = require("turndown") as TurndownCtor;
 
   const zip = await JSZip.loadAsync(buffer);
   const htmlFiles = Object.keys(zip.files)
     .filter(f => (f.endsWith(".html") || f.endsWith(".xhtml")) && !f.includes("__MACOSX"))
     .sort();
 
+  const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
   const parts: string[] = [];
+
   for (const fname of htmlFiles) {
     const content = await zip.files[fname].async("string");
     const bodyMatch = content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
@@ -232,10 +255,10 @@ function extractJSON(buffer: Buffer): ExtractResult {
 }
 
 async function extractImageOCR(buffer: Buffer, groqKey: string): Promise<ExtractResult> {
-  const Groq = (await import("groq-sdk")).default;
+  const Groq = require("groq-sdk") as typeof import("groq-sdk").default;
   const client = new Groq({ apiKey: groqKey });
 
-  // Detect image MIME from magic bytes
+  // Detect image MIME type from magic bytes
   const magic = buffer.slice(0, 4);
   let mimeType = "image/jpeg";
   if (magic[0] === 0x89 && magic[1] === 0x50) mimeType = "image/png";
@@ -243,7 +266,6 @@ async function extractImageOCR(buffer: Buffer, groqKey: string): Promise<Extract
   else if (magic[0] === 0x52 && magic[1] === 0x49) mimeType = "image/webp";
 
   const base64 = buffer.toString("base64");
-
   const response = await client.chat.completions.create({
     model: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
     messages: [
@@ -257,7 +279,7 @@ async function extractImageOCR(buffer: Buffer, groqKey: string): Promise<Extract
           },
           {
             type: "text",
-            text: "Extract ALL text from this image. Preserve headings, lists, tables, and formatting as accurately as possible using Markdown. Return only the extracted text — no commentary, no preamble.",
+            text: "Extract ALL text from this image. Preserve headings, lists, tables, and structure using Markdown. Return only the extracted text — no commentary.",
           },
         ],
       },
@@ -291,7 +313,8 @@ export async function generateOutput(
 async function generateMarkdown(text: string, sourceHtml?: string): Promise<GenerateResult> {
   let md = text;
   if (sourceHtml?.trim()) {
-    const TurndownService = (await import("turndown")).default;
+    type TurndownCtor = new (opts: Record<string, unknown>) => { turndown(html: string): string };
+    const TurndownService = require("turndown") as TurndownCtor;
     const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-", codeBlockStyle: "fenced" });
     md = td.turndown(sourceHtml);
   }
@@ -304,7 +327,7 @@ async function generateHTML(text: string, sourceHtml?: string): Promise<Generate
     body = sourceHtml;
   } else {
     const { marked } = await import("marked");
-    body = await marked(text);
+    body = String(await marked(text));
   }
 
   const html = `<!DOCTYPE html>
@@ -324,8 +347,7 @@ async function generateHTML(text: string, sourceHtml?: string): Promise<Generate
     th, td { border: 1px solid #e2beba; padding: 8px 14px; text-align: left; }
     th { background: #f5f3ee; font-weight: 600; }
     blockquote { border-left: 3px solid #8f000d; margin: 1em 0; padding: 0.5em 1em; color: #5a403e; }
-    ul, ol { padding-left: 1.75em; }
-    li { margin: 0.3em 0; }
+    ul, ol { padding-left: 1.75em; } li { margin: 0.3em 0; }
     hr { border: none; border-top: 1px solid #e2beba; margin: 2em 0; }
   </style>
 </head>
@@ -346,9 +368,7 @@ function generateCSV(text: string): GenerateResult {
 
 function generateJSON(text: string): GenerateResult {
   let payload: unknown;
-  try {
-    payload = JSON.parse(text);
-  } catch {
+  try { payload = JSON.parse(text); } catch {
     payload = { content: text, lines: text.split("\n").filter(Boolean) };
   }
   return {
@@ -364,24 +384,23 @@ function generateXML(text: string): GenerateResult {
 }
 
 async function generateDOCX(text: string): Promise<GenerateResult> {
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import("docx");
+  // docx has both CJS (dist/index.cjs) and ESM (dist/index.mjs) — use require() for CJS to avoid ESM interop issues
+  type DocxMod = {
+    Document: new (opts: unknown) => unknown;
+    Packer: { toBuffer(doc: unknown): Promise<Buffer> };
+    Paragraph: new (opts: unknown) => unknown;
+    TextRun: new (opts: { text: string }) => unknown;
+    HeadingLevel: { HEADING_1: unknown; HEADING_2: unknown; HEADING_3: unknown };
+  };
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require("docx") as DocxMod;
 
   const children = text.split("\n").map(line => {
-    if (line.startsWith("### ")) {
-      return new Paragraph({ text: line.slice(4).trim(), heading: HeadingLevel.HEADING_3 });
-    } else if (line.startsWith("## ")) {
-      return new Paragraph({ text: line.slice(3).trim(), heading: HeadingLevel.HEADING_2 });
-    } else if (line.startsWith("# ")) {
-      return new Paragraph({ text: line.slice(2).trim(), heading: HeadingLevel.HEADING_1 });
-    } else if (/^[-*]\s/.test(line)) {
-      return new Paragraph({ children: [new TextRun({ text: `• ${line.slice(2).trim()}` })] });
-    } else if (/^\d+\.\s/.test(line)) {
-      return new Paragraph({ children: [new TextRun({ text: line })] });
-    } else if (line.trim() === "") {
-      return new Paragraph({ text: "" });
-    } else {
-      return new Paragraph({ children: [new TextRun({ text: line })] });
-    }
+    if (line.startsWith("### ")) return new Paragraph({ text: line.slice(4).trim(), heading: HeadingLevel.HEADING_3 });
+    if (line.startsWith("## "))  return new Paragraph({ text: line.slice(3).trim(), heading: HeadingLevel.HEADING_2 });
+    if (line.startsWith("# "))   return new Paragraph({ text: line.slice(2).trim(), heading: HeadingLevel.HEADING_1 });
+    if (/^[-*]\s/.test(line))    return new Paragraph({ children: [new TextRun({ text: `• ${line.slice(2).trim()}` })] });
+    if (line.trim() === "")      return new Paragraph({ text: "" });
+    return new Paragraph({ children: [new TextRun({ text: line })] });
   });
 
   const doc = new Document({ sections: [{ children }] });
@@ -395,7 +414,24 @@ async function generateDOCX(text: string): Promise<GenerateResult> {
 }
 
 async function generatePDF(text: string): Promise<GenerateResult> {
-  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+  type PdfLibMod = {
+    PDFDocument: { create(): Promise<PDFDocInstance> };
+    StandardFonts: { Helvetica: string; HelveticaBold: string };
+    rgb(r: number, g: number, b: number): unknown;
+  };
+  type PDFDocInstance = {
+    embedFont(name: string): Promise<PDFFont>;
+    addPage(dims: [number, number]): PDFPage;
+    save(): Promise<Uint8Array>;
+  };
+  type PDFFont = {
+    widthOfTextAtSize(text: string, size: number): number;
+  };
+  type PDFPage = {
+    drawText(text: string, opts: Record<string, unknown>): void;
+  };
+
+  const { PDFDocument, StandardFonts, rgb } = require("pdf-lib") as PdfLibMod;
 
   const pdfDoc = await PDFDocument.create();
   const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -412,16 +448,13 @@ async function generatePDF(text: string): Promise<GenerateResult> {
     if (y - h < M) { page = pdfDoc.addPage([W, H]); y = H - M; }
   }
 
-  function drawLine(raw: string, font: typeof regular, size: number, indent = 0) {
-    // Sanitize to printable ASCII (pdf-lib Standard fonts are WinAnsi)
-    const s = raw.replace(/[^\x20-\x7E]/g, char => {
-      const replacements: Record<string, string> = {
-        "‘": "'", "’": "'", "“": '"', "”": '"',
-        "–": "-", "—": "--", "…": "...", " ": " ",
-      };
-      return replacements[char] ?? "";
-    });
-
+  function drawLine(raw: string, font: PDFFont, size: number, indent = 0) {
+    // Sanitize: pdf-lib standard fonts are WinAnsi (Latin-1 only)
+    const REPLACE: Record<string, string> = {
+      "‘": "'", "’": "'", "“": '"', "”": '"',
+      "–": "-", "—": "--", "…": "...", " ": " ",
+    };
+    const s = raw.replace(/[^\x20-\x7E]/g, c => REPLACE[c] ?? "");
     if (!s.trim()) { y -= LH * 0.5; return; }
 
     const words = s.split(" ");
