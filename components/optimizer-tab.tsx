@@ -6,6 +6,7 @@ import { InsightCard } from "./insight-card";
 import { TipCard } from "./tip-card";
 import { EmptyState } from "./empty-state";
 import { CopyButton } from "./copy-button";
+import { SpecialistSpotlight } from "./specialist-spotlight";
 import { cn, fmt, calcStats } from "@/lib/utils";
 import { getContextualTip } from "@/lib/guidance";
 import { GROQ_MODELS } from "@/lib/prompts";
@@ -68,6 +69,7 @@ export function OptimizerTab() {
 
   return (
     <div className="space-y-10 animate-fade-in">
+      <SpecialistSpotlight />
       {tip && <TipCard tip={tip} />}
 
       {/* Editor canvas */}

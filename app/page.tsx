@@ -63,6 +63,11 @@ export default function Home() {
               >
                 <span className="material-symbols-outlined text-base">{icon}</span>
                 {label}
+                {id === "architect" && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed">
+                    Idea → Prompt
+                  </span>
+                )}
                 {activeTab === id && (
                   <span className="absolute bottom-0 left-0 right-0 h-px bg-primary dark:bg-primary-fixed-dim" />
                 )}

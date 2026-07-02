@@ -75,6 +75,14 @@ export function ArchitectTab() {
 
   return (
     <div className="space-y-10 animate-fade-in">
+      <div className="space-y-2">
+        <span className="text-label-sm uppercase tracking-[0.2em] text-secondary opacity-70">Idea → Full-Proof Prompt</span>
+        <h2 className="font-serif text-headline-lg text-on-surface">Give me a brief idea. I&apos;ll write the complete prompt.</h2>
+        <p className="text-sm text-on-surface-variant/70 max-w-2xl">
+          No need to engineer anything yourself — describe your goal in a sentence and the 7-phase pipeline analyses intent, resolves gaps, and hands back a production-ready prompt for your chosen platform.
+        </p>
+      </div>
+
       {tip && <TipCard tip={tip} />}
 
       <div className="grid lg:grid-cols-2 gap-8">
@@ -125,8 +133,8 @@ export function ArchitectTab() {
 
           {/* Studio context card */}
           <div className="luxury-card p-6 rounded-xl space-y-4">
-            <h4 className="font-serif text-headline-md text-on-surface">Studio Context</h4>
-            <p className="text-sm text-on-surface-variant italic">"Precision is the byproduct of intentional silence."</p>
+            <h4 className="font-serif text-headline-md text-on-surface">How this works</h4>
+            <p className="text-sm text-on-surface-variant italic">"Give a brief idea, get back a full-proof prompt."</p>
             <div className="editorial-rule" />
             <p className="text-xs text-on-surface-variant/70">
               The 7-phase architect pipeline analyses intent, resolves contradictions, injects platform-specific patterns, and scores the output across 6 dimensions.
