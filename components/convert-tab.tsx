@@ -242,12 +242,22 @@ export function ConvertTab() {
       {/* Drop Zone — shown when idle */}
       {stage === "idle" && (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload a document. Click or press Enter to browse files, or drag and drop."
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
+          onKeyDown={e => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileRef.current?.click();
+            }
+          }}
           className={cn(
             "flex flex-col items-center justify-center gap-6 p-16 rounded-xl border-2 border-dashed cursor-pointer transition-all duration-300",
+            "focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
             dragging
               ? "border-primary bg-primary-container/10 scale-[1.005]"
               : "border-ink/50 dark:border-[#3d3a38] bg-surface-container-lowest dark:bg-[#25261f] hover:border-primary/50 hover:bg-surface-container-low/50",
@@ -297,6 +307,7 @@ export function ConvertTab() {
               onClick={reset}
               className="text-on-surface-variant/50 hover:text-primary transition-colors"
               title="Remove file"
+              aria-label="Remove file"
             >
               <span className="material-symbols-outlined text-lg">close</span>
             </button>
@@ -405,7 +416,10 @@ export function ConvertTab() {
       {error && (
         <div className="flex items-start gap-3 p-4 rounded-lg border border-error/30 bg-error-container/20 text-sm text-on-error-container">
           <span className="material-symbols-outlined text-error text-base mt-0.5">error</span>
-          {error}
+          <div className="space-y-0.5">
+            <p>{error}</p>
+            <p className="text-xs text-on-error-container/60">Try a smaller file or a different format.</p>
+          </div>
         </div>
       )}
 
@@ -498,6 +512,8 @@ export function ConvertTab() {
                 <button
                   onClick={() => setEnhanced(null)}
                   className="text-[11px] uppercase tracking-widest text-on-surface-variant/50 hover:text-primary transition-colors"
+                  title="Reset to original"
+                  aria-label="Reset to original"
                 >
                   Reset to original
                 </button>
@@ -567,6 +583,8 @@ export function ConvertTab() {
             <button
               onClick={reset}
               className="flex items-center gap-2 text-label-sm uppercase tracking-wider text-on-surface-variant/50 hover:text-primary transition-colors"
+              title="Convert another document"
+              aria-label="Convert another document"
             >
               <span className="material-symbols-outlined text-sm">add_circle</span>
               Convert another document

@@ -17,26 +17,16 @@ export function Footer() {
           </a>
         </div>
 
-        <div className="flex gap-12">
-          <div className="flex flex-col gap-3">
-            <span className="text-label-sm text-on-surface-variant/40 uppercase tracking-[0.2em] mb-1">Platform</span>
-            <a className="text-sm text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Philosophy</a>
-            <a className="text-sm text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Journal</a>
-          </div>
-          <div className="flex flex-col gap-3">
-            <span className="text-label-sm text-on-surface-variant/40 uppercase tracking-[0.2em] mb-1">Legal</span>
-            <a className="text-sm text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Privacy</a>
-            <a className="text-sm text-on-surface-variant hover:text-primary transition-colors cursor-pointer">Terms</a>
-          </div>
-        </div>
-
         <div className="flex gap-4">
-          <div className="w-10 h-10 border border-ink dark:border-[#3d3a38] rounded-full flex items-center justify-center hover:bg-on-surface hover:text-surface transition-all cursor-pointer">
+          <a
+            href="https://github.com/tanmayagr2021/prompt-optimizer"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="View source on GitHub"
+            className="w-10 h-10 border border-ink dark:border-[#3d3a38] rounded-full flex items-center justify-center hover:bg-on-surface hover:text-surface transition-all"
+          >
             <span className="material-symbols-outlined text-sm">terminal</span>
-          </div>
-          <div className="w-10 h-10 border border-ink dark:border-[#3d3a38] rounded-full flex items-center justify-center hover:bg-on-surface hover:text-surface transition-all cursor-pointer">
-            <span className="material-symbols-outlined text-sm">history_edu</span>
-          </div>
+          </a>
         </div>
       </div>
     </footer>

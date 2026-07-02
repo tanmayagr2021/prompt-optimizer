@@ -90,6 +90,7 @@ export function OptimizerTab() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Begin crafting your instructions here… Use [[variables]] for dynamic injection."
+            aria-label="Prompt to optimize"
             className="writing-surface w-full min-h-[280px] bg-transparent border-none focus:ring-0 p-0 font-sans text-body-lg leading-relaxed text-on-surface placeholder:text-outline-variant/40 resize-none"
           />
 
@@ -123,6 +124,7 @@ export function OptimizerTab() {
                 onChange={(e) => setModel(e.target.value)}
                 className="bg-transparent border-none text-label-sm text-on-surface-variant/60 cursor-pointer outline-none hover:text-on-surface transition-colors"
                 title="Select model"
+                aria-label="Select AI model"
               >
                 {GROQ_MODELS.map((m) => (
                   <option key={m} value={m}>{m}</option>
@@ -158,7 +160,7 @@ export function OptimizerTab() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-start gap-3 p-4 rounded-lg border border-error/30 bg-error-container/20 text-on-error-container text-sm">
+        <div role="alert" className="flex items-start gap-3 p-4 rounded-lg border border-error/30 bg-error-container/20 text-on-error-container text-sm">
           <span className="material-symbols-outlined text-error text-base mt-0.5">error</span>
           {error}
         </div>

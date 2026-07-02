@@ -25,10 +25,12 @@ export function Header() {
           StingyPocketEngineer
         </button>
 
-        <nav className="hidden md:flex items-center gap-10">
+        <nav role="tablist" className="hidden md:flex items-center gap-10">
           {NAV.map(({ id, label }) => (
             <button
               key={id}
+              role="tab"
+              aria-selected={activeTab === id}
               onClick={() => setActiveTab(id)}
               className={cn(
                 "font-sans text-sm transition-colors duration-200",

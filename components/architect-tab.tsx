@@ -85,8 +85,9 @@ export function ArchitectTab() {
             <div className="space-y-6">
               {/* Model */}
               <div>
-                <label className="text-label-sm uppercase text-on-surface-variant block mb-2">Large Language Model</label>
+                <label htmlFor="architect-model-select" className="text-label-sm uppercase text-on-surface-variant block mb-2">Large Language Model</label>
                 <select
+                  id="architect-model-select"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                   className="w-full bg-surface-container-low dark:bg-[#232420] border-b border-outline-variant/50 p-3 font-sans text-sm text-on-surface focus:border-primary-container transition-colors appearance-none cursor-pointer rounded-none outline-none"
@@ -105,6 +106,7 @@ export function ArchitectTab() {
                       <button
                         key={p}
                         onClick={() => setPlatform(p)}
+                        aria-pressed={platform === p}
                         className={cn(
                           "inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium border transition-all",
                           platform === p
@@ -147,6 +149,7 @@ export function ArchitectTab() {
               value={request}
               onChange={(e) => setRequest(e.target.value)}
               placeholder={`e.g. "Analyse a Python codebase for security vulnerabilities and produce an editorial-style audit report for ${platform}"`}
+              aria-label="Task description for prompt architecture"
               className="writing-surface w-full min-h-[180px] bg-transparent border-none focus:ring-0 p-0 font-sans text-body-md leading-relaxed text-on-surface placeholder:text-outline-variant/30 resize-none"
             />
 
@@ -177,7 +180,7 @@ export function ArchitectTab() {
           </div>
 
           {error && (
-            <div className="flex items-start gap-3 p-4 rounded-lg border border-error/30 bg-error-container/20 text-sm">
+            <div role="alert" className="flex items-start gap-3 p-4 rounded-lg border border-error/30 bg-error-container/20 text-sm">
               <span className="material-symbols-outlined text-error text-base mt-0.5">error</span>
               {error}
             </div>

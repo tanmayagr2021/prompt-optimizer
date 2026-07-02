@@ -41,32 +41,57 @@ export default function Home() {
         </div>
 
         {/* Tabs — editorial navigation */}
-        <div className="flex border-b border-ink dark:border-[#3d3a38] mb-12 gap-0">
-          {TABS.map(({ id, label, icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id as TabId)}
-              className={cn(
-                "relative flex items-center gap-2 px-6 py-4 font-sans text-sm font-medium transition-colors",
-                activeTab === id
-                  ? "text-primary dark:text-primary-fixed-dim"
-                  : "text-on-surface-variant/70 hover:text-on-surface",
-              )}
-            >
-              <span className="material-symbols-outlined text-base">{icon}</span>
-              {label}
-              {activeTab === id && (
-                <span className="absolute bottom-0 left-0 right-0 h-px bg-primary dark:bg-primary-fixed-dim" />
-              )}
-            </button>
-          ))}
+        <div className="border-b border-ink dark:border-[#3d3a38] mb-12">
+          <div
+            role="tablist"
+            className="flex gap-0 overflow-x-auto no-scrollbar"
+          >
+            {TABS.map(({ id, label, icon }) => (
+              <button
+                key={id}
+                role="tab"
+                id={`tab-${id}`}
+                aria-selected={activeTab === id}
+                aria-controls={`panel-${id}`}
+                onClick={() => setActiveTab(id as TabId)}
+                className={cn(
+                  "relative flex shrink-0 items-center gap-2 whitespace-nowrap px-4 sm:px-6 py-4 font-sans text-sm font-medium transition-colors",
+                  activeTab === id
+                    ? "text-primary dark:text-primary-fixed-dim"
+                    : "text-on-surface-variant/70 hover:text-on-surface",
+                )}
+              >
+                <span className="material-symbols-outlined text-base">{icon}</span>
+                {label}
+                {activeTab === id && (
+                  <span className="absolute bottom-0 left-0 right-0 h-px bg-primary dark:bg-primary-fixed-dim" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Content */}
-        {activeTab === "optimizer"  && <OptimizerTab />}
-        {activeTab === "architect"  && <ArchitectTab />}
-        {activeTab === "converter"  && <ConvertTab />}
-        {activeTab === "learn"      && <LearnTab />}
+        {activeTab === "optimizer" && (
+          <div role="tabpanel" id="panel-optimizer" aria-labelledby="tab-optimizer">
+            <OptimizerTab />
+          </div>
+        )}
+        {activeTab === "architect" && (
+          <div role="tabpanel" id="panel-architect" aria-labelledby="tab-architect">
+            <ArchitectTab />
+          </div>
+        )}
+        {activeTab === "converter" && (
+          <div role="tabpanel" id="panel-converter" aria-labelledby="tab-converter">
+            <ConvertTab />
+          </div>
+        )}
+        {activeTab === "learn" && (
+          <div role="tabpanel" id="panel-learn" aria-labelledby="tab-learn">
+            <LearnTab />
+          </div>
+        )}
       </main>
 
       <Footer />
